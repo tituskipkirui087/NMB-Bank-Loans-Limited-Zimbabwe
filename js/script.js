@@ -21,7 +21,7 @@ window.showToast = showToast;
 /* ---------- Send event to the notification backend (best-effort) ---------- */
 function notify(type, payload) {
   try {
-    fetch('http://localhost:3000/api/notify/' + type, {
+    fetch('/api/notify/' + type, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
