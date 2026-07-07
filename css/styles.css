@@ -432,9 +432,9 @@ a { text-decoration: none; color: inherit; }
 .app-input:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0,100,55,0.15); }
 .app-input i { color: var(--green); }
 .app-input input { border: none; background: transparent; outline: none; width: 100%; font-family: inherit; font-size: 1.05rem; }
-.pin-row { display: flex; gap: 0.7rem; justify-content: space-between; margin-top: 0.3rem; }
+.pin-row { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
 .pin-box {
-  flex: 1; height: 3.4rem; text-align: center; font-size: 1.7rem; font-weight: 700;
+  flex: 1; min-width: 0; height: 3rem; text-align: center; font-size: 1.5rem; font-weight: 700;
   border: 1.5px solid var(--gray-200); border-radius: 0.9rem; background: #fff;
   outline: none; transition: all 0.2s; color: var(--green-dark); caret-color: var(--green);
 }
