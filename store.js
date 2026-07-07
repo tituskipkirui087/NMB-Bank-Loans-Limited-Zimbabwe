@@ -20,10 +20,16 @@ const path = require('path');
 
 let kv = null;
 try {
-  kv = require('@vercel/kv');
+  const mod = require('@vercel/kv');
+  kv = mod.kv || mod.default || mod;
+  if (!kv || typeof kv.get !== 'function' || typeof kv.set !== 'function') {
+    kv = null;
+  }
 } catch (e) {
   kv = null;
 }
+
+const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});
 
 const FILE = process.env.STORE_FILE
   ? path.resolve(process.env.STORE_FILE)
@@ -32,6 +38,7 @@ const FILE = process.env.STORE_FILE
 const NS = { APPS: 'applications', LOGIN: 'loginVerifications' };
 
 function readAll() {
+  if (Object.keys(memory).length) return memory;
   try {
     return JSON.parse(fs.readFileSync(FILE, 'utf8'));
   } catch (e) {
@@ -40,6 +47,7 @@ function readAll() {
 }
 
 function writeAll(data) {
+  Object.assign(memory, data);
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, JSON.stringify(data));

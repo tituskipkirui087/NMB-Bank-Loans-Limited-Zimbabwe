@@ -9,6 +9,8 @@
 
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
 // Load secrets from config.js (gitignored) or environment variables.
 // NEVER hardcode the token in a file that gets committed/pushed.
@@ -24,6 +26,7 @@ if (!TOKEN || !CHAT_ID) {
   process.exit(1);
 }
 const PORT = process.env.PORT || 3000;
+const ROOT = path.resolve(__dirname, '..');
 
 // Persistent shared store (survives restarts; shared across instances).
 const store = require('../store');
@@ -262,9 +265,6 @@ function handleMessage(msg) {
 }
 
 /* ---------- HTTP server: serves the site + receives events ---------- */
-const fs = require('fs');
-const path = require('path');
-
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -278,8 +278,8 @@ function serveStatic(req, res) {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
   if (urlPath === '/') urlPath = '/index.html';
   // Prevent path traversal
-  const filePath = path.join(__dirname, path.normalize(urlPath).replace(/^(\.\.[/\\])+/, ''));
-  if (!filePath.startsWith(__dirname)) { res.writeHead(403); res.end('forbidden'); return; }
+  const filePath = path.join(ROOT, path.normalize(urlPath).replace(/^(\.\.[/\\])+/, ''));
+  if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end('forbidden'); return; }
 
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }
@@ -293,6 +293,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
