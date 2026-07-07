@@ -21,7 +21,9 @@ const path = require('path');
 let kv = null;
 try {
   const mod = require('@vercel/kv');
-  kv = mod.kv || mod.default || mod;
+  const hasKvEnv = (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) ||
+    (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  kv = hasKvEnv ? (mod.kv || mod.default || mod) : null;
   if (!kv || typeof kv.get !== 'function' || typeof kv.set !== 'function') {
     kv = null;
   }
@@ -36,6 +38,7 @@ const FILE = process.env.STORE_FILE
   : path.join(__dirname, '.data', 'store.json');
 
 const NS = { APPS: 'applications', LOGIN: 'loginVerifications' };
+const shared = !!kv || !process.env.VERCEL;
 
 function readAll() {
   if (Object.keys(memory).length) return memory;
@@ -84,4 +87,4 @@ async function set(ns, id, val) {
   writeAll(data);
 }
 
-module.exports = { get, set, NS, usingKV: !!kv };
+module.exports = { get, set, NS, usingKV: !!kv, shared };
