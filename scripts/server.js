@@ -4,7 +4,7 @@
  * SECURITY: The bot token lives ONLY here (server-side). Never put it in the
  * browser. Keep this file / server private and do not commit it to public repos.
  *
- * Run:  node server.js   (then open the site; it posts events to :3000)
+ * Run:  node scripts/server.js   (then open the site; it posts events to :3000)
  */
 
 const http = require('http');

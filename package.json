@@ -2,9 +2,9 @@
   "name": "nmb-loan-notify",
   "version": "1.0.0",
   "description": "NMB Loan website - Telegram notification backend (new applications, logins, with Approve/Reject buttons).",
-  "main": "server.js",
+  "main": "scripts/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node scripts/server.js"
   },
   "private": true
 }
