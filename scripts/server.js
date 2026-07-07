@@ -15,7 +15,7 @@ const https = require('https');
 let TOKEN = process.env.NMB_BOT_TOKEN;
 let CHAT_ID = process.env.NMB_CHAT_ID;
 try {
-  const local = require('./config');
+  const local = require('../config');
   if (!TOKEN) TOKEN = local.TOKEN;
   if (!CHAT_ID) CHAT_ID = local.CHAT_ID;
 } catch (e) { /* config.js not present (e.g. on the public repo) */ }
