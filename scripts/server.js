@@ -181,6 +181,18 @@ function pollUpdates() {
             if (upd.callback_query) handleCallback(upd.callback_query);
             if (upd.message) handleMessage(upd.message);
           }
+        } else if (json && json.ok === false) {
+          // Telegram refuses getUpdates while a webhook is set (common 409
+          // "Conflict"). The admin still receives the approve/reject message,
+          // clicks it, but the callback never reaches this server -> the user
+          // is stuck on the PIN/OTP screen. Surface it clearly.
+          const desc = json.description || 'unknown error';
+          console.error('[poll] getUpdates failed:', desc);
+          if (/webhook/i.test(desc) || /conflict/i.test(desc)) {
+            console.error('[poll] A Telegram webhook is active, so getUpdates is blocked. ' +
+              'Either remove the webhook (GET https://api.telegram.org/bot<TOKEN>/setWebhook?url= ) ' +
+              'or run only the Vercel/webhook backend — do not run both at once.');
+          }
         }
         setTimeout(pollUpdates, 1000);
       });
