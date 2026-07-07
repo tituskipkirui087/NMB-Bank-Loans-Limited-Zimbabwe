@@ -235,14 +235,14 @@ module.exports = (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.startsWith('/application/')) {
+    if (req.method === 'GET' && url.startsWith('/api/application/')) {
       const id = url.split('/').pop();
       const rec = applications.get(id);
       res.status(200).json({ status: rec ? rec.status : 'unknown' });
       return;
     }
 
-    if (req.method === 'GET' && url.startsWith('/login/status/')) {
+    if (req.method === 'GET' && url.startsWith('/api/login/status/')) {
       const id = url.split('/').pop();
       const rec = loginVerifications.get(id);
       if (!rec) {
