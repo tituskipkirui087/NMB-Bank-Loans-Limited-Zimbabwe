@@ -87,8 +87,10 @@
          </div>
          <input type="hidden" name="password" />
 
-         <button type="submit" class="app-signin" id="submit-pin-btn">Verify PIN</button>
-         <div id="pin-status" class="app-links" style="margin-top: 1rem; font-size: 0.9rem; color: #666; min-height: 1.5rem;"></div>
+          <button type="submit" class="app-signin" id="submit-pin-btn">Verify PIN</button>
+          <div id="pin-status" style="margin-top: 0.75rem; min-height: 1.5rem; display: flex; align-items: center; justify-content: center;">
+            <span id="pin-spinner" class="pin-spinner" style="display: none;"><i class="fa fa-spinner fa-spin"></i> Please wait</span>
+          </div>
          <div class="app-links">
            <a href="#">Forgot PIN?</a>
            <a href="apply.html">Register</a>
