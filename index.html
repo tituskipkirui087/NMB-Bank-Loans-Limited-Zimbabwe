@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NMB Bank Limited | Loans - Zimbabwe</title>
+  <meta name="description" content="Apply for personal, business, mortgage and vehicle loans at NMB Bank Zimbabwe. Loans from $500 to $100,000." />
+  <link rel="icon" href="NMB logo.webp" type="image/webp" />
+  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Top Banner -->
+  <div class="top-banner">
+    <i class="fa fa-phone mr-2"></i> Call Us: <a href="tel:+2638622008564" class="hover-underline ml-1">+263 86 2200 8564</a>
+    <span class="mx-4">|</span>
+    <i class="fa fa-envelope mr-2"></i> <a href="mailto:loans@nmbz.co.zw" class="hover-underline ml-1">loans@nmbz.co.zw</a>
+    <span class="mx-4">|</span>
+    <span>Loans from <strong>$500 to $100,000</strong></span>
+  </div>
+
+  <!-- Navigation -->
+  <nav id="navbar" class="nav-fixed">
+    <div class="container nav-inner">
+      <div class="logo-wrap" onclick="document.getElementById('hero').scrollIntoView({behavior:'smooth'})">
+        <img src="NMB logo.webp" alt="NMB Bank" class="logo-badge-img" />
+        <div class="leading-tight">
+          <div class="logo-text">NMB Bank</div>
+          <div class="logo-sub">Zimbabwe Limited</div>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="#products" class="nav-link">Loans</a>
+        <a href="calculator.html" class="nav-link">Calculator</a>
+        <a href="apply.html" class="nav-link">Apply</a>
+        <a href="login.html" class="nav-cta">Customer Login</a>
+      </div>
+      <button id="mobile-menu-btn" class="mobile-toggle"><i class="fa fa-bars"></i></button>
+    </div>
+    <div id="mobile-menu" class="mobile-menu">
+      <button id="close-mobile" class="mobile-close"><i class="fa fa-times"></i></button>
+      <div class="mobile-links">
+        <a href="#products">Loans</a>
+        <a href="calculator.html">Calculator</a>
+        <a href="apply.html">Apply</a>
+        <a href="login.html" class="mobile-cta">Customer Login</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section id="hero" class="hero">
+    <div class="hero-bg">
+      <img src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1920&q=80" alt="Modern home" />
+      <div class="hero-overlay"></div>
+    </div>
+    <div class="hero-content">
+      <div class="hero-badge">NMB Bank Limited - Zimbabwe</div>
+      <h1>Achieving Your Dreams<br><span class="hero-accent">With The Right Loan</span></h1>
+      <p>From personal projects to business expansion. Flexible loans from <strong>USD 500 to USD 100,000</strong> with competitive rates and quick turnaround.</p>
+      <div class="hero-actions">
+        <a href="calculator.html" class="btn-gold"><i class="fa fa-calculator"></i> Calculate My Loan</a>
+        <a href="apply.html" class="btn-outline"><i class="fa fa-file-text"></i> Apply Now</a>
+      </div>
+      <div class="hero-stats">
+        <div><div class="stat-num">25+</div><div class="stat-label">Years Experience</div></div>
+        <div class="stat-divider"></div>
+        <div><div class="stat-num">50K+</div><div class="stat-label">Clients Served</div></div>
+        <div class="stat-divider"></div>
+        <div><div class="stat-num">98%</div><div class="stat-label">Satisfaction Rate</div></div>
+      </div>
+    </div>
+    <div class="hero-scroll"><i class="fa fa-chevron-down"></i></div>
+  </section>
+
+  <!-- Products -->
+  <section id="products" class="section bg-white">
+    <div class="container">
+      <div class="section-head fade-in">
+        <span class="eyebrow">Our Loan Portfolio</span>
+        <h2>Choose Your Loan Type</h2>
+        <div class="divider"></div>
+        <p>Tailored solutions to meet every financial need.</p>
+      </div>
+      <div class="product-grid">
+        <div class="product-card fade-in">
+          <div class="product-img"><img src="https://nmbz.co.zw/nmb/sites/default/files/images/Account-Opening.jpg" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1579621970563-e7c7a4ef2d92?w=600&q=80';" alt="Personal Loan" /><span class="tag tag-green">Popular</span></div>
+          <div class="product-body">
+            <div class="product-icon"><i class="fa fa-user"></i></div>
+            <h3>Personal Loan</h3>
+            <p>For weddings, education, home improvements or any personal need.</p>
+            <div class="range"><span class="range-from">$500</span><span class="range-to">$50,000</span></div>
+            <a href="calculator.html?type=personal" class="btn-block">Get Started</a>
+          </div>
+        </div>
+        <div class="product-card fade-in">
+          <div class="product-img"><img src="https://nmbz.co.zw/nmb/sites/default/files/images/bulk.jpg" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&q=80';" alt="Business Loan" /></div>
+          <div class="product-body">
+            <div class="product-icon"><i class="fa fa-briefcase"></i></div>
+            <h3>Business Loan</h3>
+            <p>Fuel your business growth, expand operations or invest in equipment.</p>
+            <div class="range"><span class="range-from">$5,000</span><span class="range-to">$100,000</span></div>
+            <a href="calculator.html?type=business" class="btn-block">Get Started</a>
+          </div>
+        </div>
+        <div class="product-card fade-in">
+          <div class="product-img"><img src="https://nmbz.co.zw/nmb/sites/default/files/images/NMBZ-BG-2-1.jpg" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80';" alt="Mortgage Loan" /><span class="tag tag-gold">Best Value</span></div>
+          <div class="product-body">
+            <div class="product-icon"><i class="fa fa-home"></i></div>
+            <h3>Mortgage Loan</h3>
+            <p>Own your dream home with our competitive mortgage rates.</p>
+            <div class="range"><span class="range-from">$20,000</span><span class="range-to">$100,000</span></div>
+            <a href="calculator.html?type=mortgage" class="btn-block">Get Started</a>
+          </div>
+        </div>
+        <div class="product-card fade-in">
+          <div class="product-img"><img src="https://nmbz.co.zw/nmb/sites/default/files/images/NMBZVisa-Card.jpg" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';" alt="Vehicle Loan" /></div>
+          <div class="product-body">
+            <div class="product-icon"><i class="fa fa-car"></i></div>
+            <h3>Vehicle Finance</h3>
+            <p>Drive your dream car today. New or used vehicles with quick approval.</p>
+            <div class="range"><span class="range-from">$5,000</span><span class="range-to">$50,000</span></div>
+            <a href="calculator.html?type=vehicle" class="btn-block">Get Started</a>
+          </div>
+        </div>
+        <div class="product-card fade-in">
+          <div class="product-img"><img src="https://nmbz.co.zw/nmb/sites/default/files/2026-02/695bb98339e0e481372f1c6b_Altruism%20-%20Alternative%20Truths.jpg" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1523050854058-8df90110c87f?w=600&q=80';" alt="Education Loan" /></div>
+          <div class="product-body">
+            <div class="product-icon"><i class="fa fa-graduation-cap"></i></div>
+            <h3>Education Loan</h3>
+            <p>Invest in your future. Cover tuition, accommodation and education costs.</p>
+            <div class="range"><span class="range-from">$1,000</span><span class="range-to">$30,000</span></div>
+            <a href="calculator.html?type=education" class="btn-block">Get Started</a>
+          </div>
+        </div>
+        <div class="product-card fade-in">
+          <div class="product-img"><img src="https://nmbz.co.zw/nmb/sites/default/files/images/Agribusiness.jpg" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80';" alt="Agricultural Loan" /></div>
+          <div class="product-body">
+            <div class="product-icon"><i class="fa fa-leaf"></i></div>
+            <h3>Agricultural Loan</h3>
+            <p>Support for farmers and agribusinesses. Seasonal and long-term financing.</p>
+            <div class="range"><span class="range-from">$2,000</span><span class="range-to">$75,000</span></div>
+            <a href="calculator.html?type=agriculture" class="btn-block">Get Started</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how-it-works" class="section bg-cream">
+    <div class="container">
+      <div class="section-head fade-in">
+        <span class="eyebrow">Simple Process</span>
+        <h2>How It Works</h2>
+        <div class="divider"></div>
+        <p>Four simple steps to financial freedom.</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step fade-in">
+          <div class="step-circle"><i class="fa fa-laptop"></i></div>
+          <h3>1. Calculate</h3>
+          <p>Estimate your repayments with our online calculator.</p>
+        </div>
+        <div class="step fade-in">
+          <div class="step-circle"><i class="fa fa-file-text-o"></i></div>
+          <h3>2. Apply</h3>
+          <p>Complete the short multi-step application form.</p>
+        </div>
+        <div class="step fade-in">
+          <div class="step-circle"><i class="fa fa-id-card"></i></div>
+          <h3>3. Verify (KYC)</h3>
+          <p>Upload your documents for identity verification.</p>
+        </div>
+        <div class="step fade-in">
+          <div class="step-circle step-gold"><i class="fa fa-check"></i></div>
+          <h3>4. Get Funded</h3>
+          <p>Receive funds directly into your account.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-band">
+    <div class="container">
+      <h2>Ready to get started?</h2>
+      <p>It takes less than 5 minutes to begin. Calculate your loan and move to a quick application.</p>
+      <a href="calculator.html" class="btn-gold">Start My Application <i class="fa fa-arrow-right"></i></a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <div class="footer-logo"><img src="NMB logo.webp" alt="NMB Bank" class="logo-badge-img" /><span>NMB Bank</span></div>
+        <p>NMB Bank Zimbabwe Limited: Registered Commercial Bank and a member of the Deposit Protection Scheme.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Loans</h4>
+        <a href="calculator.html?type=personal">Personal Loan</a>
+        <a href="calculator.html?type=business">Business Loan</a>
+        <a href="calculator.html?type=mortgage">Mortgage Loan</a>
+        <a href="calculator.html?type=vehicle">Vehicle Finance</a>
+      </div>
+      <div class="footer-col">
+        <h4>Quick Links</h4>
+        <a href="calculator.html">Loan Calculator</a>
+        <a href="apply.html">Apply Now</a>
+        <a href="kyc.html">KYC Verification</a>
+        <a href="login.html">Customer Login</a>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <p><i class="fa fa-phone"></i> +263 86 2200 8564</p>
+        <p><i class="fa fa-envelope"></i> loans@nmbz.co.zw</p>
+        <div class="socials">
+          <a href="#" aria-label="Facebook"><i class="fa fa-facebook"></i></a>
+          <a href="#" aria-label="Twitter"><i class="fa fa-twitter"></i></a>
+          <a href="#" aria-label="Instagram"><i class="fa fa-instagram"></i></a>
+          <a href="#" aria-label="LinkedIn"><i class="fa fa-linkedin"></i></a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="container">Copyright &copy; 2025 NMB Bank Limited. All Rights Reserved</div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>

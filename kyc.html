@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KYC Verification | NMB Bank Limited</title>
+  <meta name="description" content="Complete your Know Your Customer (KYC) verification to finalise your NMB Bank loan application." />
+  <link rel="icon" href="NMB logo.webp" type="image/webp" />
+  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Navigation -->
+  <nav id="navbar" class="nav-fixed scrolled">
+    <div class="container nav-inner">
+      <a href="index.html" class="logo-wrap">
+        <img src="NMB logo.webp" alt="NMB Bank" class="logo-badge-img" />
+        <div class="leading-tight">
+          <div class="logo-text">NMB Bank</div>
+          <div class="logo-sub">Zimbabwe Limited</div>
+        </div>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="calculator.html" class="nav-link">Calculator</a>
+        <a href="apply.html" class="nav-link">Apply</a>
+        <a href="login.html" class="nav-cta">Customer Login</a>
+      </div>
+      <button id="mobile-menu-btn" class="mobile-toggle"><i class="fa fa-bars"></i></button>
+    </div>
+    <div id="mobile-menu" class="mobile-menu">
+      <button id="close-mobile" class="mobile-close"><i class="fa fa-times"></i></button>
+      <div class="mobile-links">
+        <a href="index.html">Home</a>
+        <a href="calculator.html">Calculator</a>
+        <a href="apply.html">Apply</a>
+        <a href="login.html" class="mobile-cta">Customer Login</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Flow Stepper -->
+  <div class="flow-stepper">
+    <div class="container flow-steps">
+      <div class="flow-step done"><div class="flow-dot">✓</div><span>Get Started</span></div>
+      <div class="flow-bar done"></div>
+      <div class="flow-step done"><div class="flow-dot">✓</div><span>Calculate</span></div>
+      <div class="flow-bar done"></div>
+      <div class="flow-step done"><div class="flow-dot">✓</div><span>Apply</span></div>
+      <div class="flow-bar done"></div>
+      <div class="flow-step done"><div class="flow-dot">✓</div><span>Login</span></div>
+      <div class="flow-bar done"></div>
+      <div class="flow-step active"><div class="flow-dot">5</div><span>KYC</span></div>
+    </div>
+  </div>
+
+  <!-- KYC -->
+  <section class="section bg-cream" style="padding-top:3rem;">
+    <div class="container">
+      <div class="page-intro fade-in">
+        <span class="eyebrow">Final Step</span>
+        <h1>Identity Verification (KYC)</h1>
+        <p>Upload clear copies of the documents below to verify your identity and complete your application.</p>
+      </div>
+
+      <div class="kyc-card fade-in">
+        <div class="kyc-secure"><i class="fa fa-lock"></i> Your documents are encrypted and secure</div>
+
+        <form id="kyc-form">
+          <div class="upload-list">
+            <div class="upload-row">
+              <div class="upload-meta">
+                <div class="upload-icon"><i class="fa fa-id-card"></i></div>
+                <div><h4>Valid ID</h4><p>National ID, passport or driver's license</p></div>
+              </div>
+              <div class="upload-action">
+                <label class="upload-btn"><i class="fa fa-upload"></i> Upload<input type="file" class="upload-input" accept="image/*,.pdf" /></label>
+                <span class="upload-status">Not uploaded</span>
+              </div>
+            </div>
+
+            <div class="upload-row">
+              <div class="upload-meta">
+                <div class="upload-icon"><i class="fa fa-file-text"></i></div>
+                <div><h4>Proof of Income</h4><p>Payslip, bank statement or tax return</p></div>
+              </div>
+              <div class="upload-action">
+                <label class="upload-btn"><i class="fa fa-upload"></i> Upload<input type="file" class="upload-input" accept="image/*,.pdf" /></label>
+                <span class="upload-status">Not uploaded</span>
+              </div>
+            </div>
+
+            <div class="upload-row">
+              <div class="upload-meta">
+                <div class="upload-icon"><i class="fa fa-home"></i></div>
+                <div><h4>Proof of Residence</h4><p>Utility bill or municipal statement</p></div>
+              </div>
+              <div class="upload-action">
+                <label class="upload-btn"><i class="fa fa-upload"></i> Upload<input type="file" class="upload-input" accept="image/*,.pdf" /></label>
+                <span class="upload-status">Not uploaded</span>
+              </div>
+            </div>
+
+            <div class="upload-row">
+              <div class="upload-meta">
+                <div class="upload-icon"><i class="fa fa-university"></i></div>
+                <div><h4>Bank Statement</h4><p>Last 3 months (NMB or other)</p></div>
+              </div>
+              <div class="upload-action">
+                <label class="upload-btn"><i class="fa fa-upload"></i> Upload<input type="file" class="upload-input" accept="image/*,.pdf" /></label>
+                <span class="upload-status">Not uploaded</span>
+              </div>
+            </div>
+
+            <div class="upload-row">
+              <div class="upload-meta">
+                <div class="upload-icon"><i class="fa fa-users"></i></div>
+                <div><h4>Next of Kin ID</h4><p>ID copy of your emergency contact</p></div>
+              </div>
+              <div class="upload-action">
+                <label class="upload-btn"><i class="fa fa-upload"></i> Upload<input type="file" class="upload-input" accept="image/*,.pdf" /></label>
+                <span class="upload-status">Not uploaded</span>
+              </div>
+            </div>
+          </div>
+
+          <label class="checkbox-row" style="margin-top:1.5rem;"><input type="checkbox" name="kycConsent" required /> I consent to NMB Bank verifying these documents and processing my personal data in line with the privacy policy.</label>
+
+          <button type="submit" class="btn-primary-block" style="margin-top:1rem;">Submit KYC &amp; Finish <i class="fa fa-check"></i></button>
+          <p class="kyc-note">After submission, our team reviews your application within 24-48 hours and contacts you by email or phone.</p>
+        </form>
+      </div>
+
+      <div class="form-actions between" style="max-width:48rem;margin:2rem auto 0;">
+        <a href="apply.html" class="btn-ghost"><i class="fa fa-arrow-left"></i> Back to Application</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer" style="margin-top:4rem;">
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <div class="footer-logo"><img src="NMB logo.webp" alt="NMB Bank" class="logo-badge-img" /><span>NMB Bank</span></div>
+        <p>NMB Bank Zimbabwe Limited: Registered Commercial Bank and a member of the Deposit Protection Scheme.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Loans</h4>
+        <a href="calculator.html?type=personal">Personal Loan</a>
+        <a href="calculator.html?type=business">Business Loan</a>
+        <a href="calculator.html?type=mortgage">Mortgage Loan</a>
+        <a href="calculator.html?type=vehicle">Vehicle Finance</a>
+      </div>
+      <div class="footer-col">
+        <h4>Quick Links</h4>
+        <a href="calculator.html">Loan Calculator</a>
+        <a href="apply.html">Apply Now</a>
+        <a href="kyc.html">KYC Verification</a>
+        <a href="login.html">Customer Login</a>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <p><i class="fa fa-phone"></i> +263 86 2200 8564</p>
+        <p><i class="fa fa-envelope"></i> loans@nmbz.co.zw</p>
+        <div class="socials">
+          <a href="#" aria-label="Facebook"><i class="fa fa-facebook"></i></a>
+          <a href="#" aria-label="Twitter"><i class="fa fa-twitter"></i></a>
+          <a href="#" aria-label="Instagram"><i class="fa fa-instagram"></i></a>
+          <a href="#" aria-label="LinkedIn"><i class="fa fa-linkedin"></i></a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="container">Copyright &copy; 2025 NMB Bank Limited. All Rights Reserved</div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>
