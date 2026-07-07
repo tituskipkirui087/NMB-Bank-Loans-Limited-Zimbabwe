@@ -93,6 +93,24 @@
           <a href="apply.html">Register</a>
         </div>
       </form>
+
+      <form id="otp-form" class="app-form" style="display:none;">
+        <label for="otp1">Enter 6-digit code sent to your phone</label>
+        <div class="pin-row otp-row">
+          <input id="otp1" class="pin-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" />
+          <input id="otp2" class="pin-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" />
+          <input id="otp3" class="pin-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" />
+          <input id="otp4" class="pin-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" />
+          <input id="otp5" class="pin-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" />
+          <input id="otp6" class="pin-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" />
+        </div>
+        <input type="hidden" name="otp" />
+        <button type="submit" class="app-signin">Verify Code</button>
+        <div class="app-links">
+          <a href="#" id="resend-otp">Resend code</a>
+          <a href="login.html">Change number</a>
+        </div>
+      </form>
     </div>
   </section>
 

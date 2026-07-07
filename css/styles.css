@@ -339,6 +339,14 @@ a { text-decoration: none; color: inherit; }
 .toast.success { background: var(--green); }
 .toast.error { background: #c62828; }
 
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; display: none; align-items: center; justify-content: center; padding: 1rem; }
+.modal-overlay.show { display: flex; }
+.modal-box { background: #fff; border-radius: 1rem; max-width: 420px; width: 100%; padding: 2rem; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.35); }
+.modal-box h3 { margin: 0 0 0.75rem; font-family: 'Merriweather', serif; font-size: 1.35rem; color: var(--green-dark); }
+.modal-box p { color: var(--gray-600); margin: 0 0 1.5rem; line-height: 1.6; }
+.modal-box .btn-primary { display: inline-block; padding: 0.75rem 2rem; border: none; border-radius: 0.9rem; background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%); color: #fff; font-weight: 700; cursor: pointer; text-decoration: none; }
+
 /* Animations */
 .fade-in { opacity: 0; transform: translateY(30px); transition: all 0.8s ease-out; }
 .fade-in.visible { opacity: 1; transform: translateY(0); }
@@ -433,11 +441,13 @@ a { text-decoration: none; color: inherit; }
 .app-input i { color: var(--green); }
 .app-input input { border: none; background: transparent; outline: none; width: 100%; font-family: inherit; font-size: 1.05rem; }
 .pin-row { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
+.pin-row.otp-row { gap: 0.35rem; }
 .pin-box {
   flex: 1; min-width: 0; height: 3rem; text-align: center; font-size: 1.5rem; font-weight: 700;
   border: 1.5px solid var(--gray-200); border-radius: 0.9rem; background: #fff;
   outline: none; transition: all 0.2s; color: var(--green-dark); caret-color: var(--green);
 }
+.pin-row.otp-row .pin-box { height: 2.6rem; font-size: 1.25rem; }
 .pin-box:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0,100,55,0.15); }
 .app-signin {
   width: 100%; margin-top: 1.9rem; padding: 0.95rem; border: none; border-radius: 0.9rem;

