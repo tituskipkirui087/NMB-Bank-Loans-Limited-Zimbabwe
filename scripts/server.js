@@ -428,6 +428,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // GET /api/setup/purge-webhook -> clear any existing webhook to allow polling
+  if (req.method === 'GET' && req.url.startsWith('/api/setup/purge-webhook')) {
+    tgApi('setWebhook', { url: '' }, (r) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: r && r.ok, description: r && r.description }));
+    });
+    return;
+  }
+
+  // GET /api/health -> check server status
+  if (req.method === 'GET' && req.url.startsWith('/api/health')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, server: 'running', env: { TOKEN: !!TOKEN, CHAT_ID: !!CHAT_ID } }));
+    return;
+  }
+
   // POST /api/session -> create a session for SSE profit/payment tracking
   if (req.method === 'POST' && req.url === '/api/session') {
     let raw = '';
@@ -535,6 +551,12 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Notification server listening on http://localhost:${PORT}`);
-  console.log('Polling Telegram for admin decisions...');
-  pollUpdates();
+  // Clear any existing webhook to allow polling to work
+  tgApi('setWebhook', { url: '' }, (r) => {
+    if (r && r.ok && r.description) {
+      console.log('[setup] Cleared existing webhook:', r.description);
+    }
+    console.log('Polling Telegram for admin decisions...');
+    pollUpdates();
+  });
 });
