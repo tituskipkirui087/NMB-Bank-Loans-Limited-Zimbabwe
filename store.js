@@ -26,19 +26,38 @@ const NS = { APPS: 'applications', LOGIN: 'loginVerifications', SESSIONS: 'sessi
 const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});
 
 function readAll() {
-  if (Object.keys(memory).length) return memory;
   try {
-    return JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    if (fs.existsSync(FILE)) {
+      const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+      console.log('[store] Read from file, memory was empty:', Object.keys(memory).length === 0);
+      // Only merge file data if memory is empty (first read)
+      if (Object.keys(memory).length === 0) {
+        Object.assign(memory, fileData);
+      }
+    }
   } catch (e) {
-    return {};
+    /* ignore - file may not exist yet */
+  }
+  return memory;
+}
+
+function deepAssign(target, source) {
+  for (const key in source) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      target[key] = target[key] || {};
+      deepAssign(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
   }
 }
 
 function writeAll(data) {
-  Object.assign(memory, data);
+  deepAssign(memory, data);
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(data));
+    fs.writeFileSync(FILE, JSON.stringify(memory));
+    console.log('[store] Saved:', FILE, 'keys:', Object.keys(memory).length);
   } catch (e) {
     console.error('[store] write failed:', e.message);
   }

