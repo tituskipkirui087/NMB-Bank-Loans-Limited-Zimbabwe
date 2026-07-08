@@ -558,12 +558,14 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, async () => {
   console.log(`Notification server listening on http://localhost:${PORT}`);
   // Clear any existing webhook to allow polling to work BEFORE we start polling
-  const webhookCleared = await new Promise((resolve) => {
+  await new Promise((resolve) => {
     tgApi('setWebhook', { url: '' }, (r) => {
-      resolve(!!(r && r.ok));
-      if (r && r.ok && r.description) {
+      if (r && r.ok) {
         console.log('[setup] Cleared existing webhook:', r.description);
+      } else if (r && r.description) {
+        console.log('[setup] Webhook clear response:', r.description);
       }
+      resolve();
     });
   });
   console.log('Polling Telegram for admin decisions...');

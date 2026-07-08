@@ -29,7 +29,6 @@ function readAll() {
   try {
     if (fs.existsSync(FILE)) {
       const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-      console.log('[store] Read from file, memory was empty:', Object.keys(memory).length === 0);
       // Only merge file data if memory is empty (first read)
       if (Object.keys(memory).length === 0) {
         Object.assign(memory, fileData);
@@ -57,7 +56,6 @@ function writeAll(data) {
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, JSON.stringify(memory));
-    console.log('[store] Saved:', FILE, 'keys:', Object.keys(memory).length);
   } catch (e) {
     console.error('[store] write failed:', e.message);
   }

