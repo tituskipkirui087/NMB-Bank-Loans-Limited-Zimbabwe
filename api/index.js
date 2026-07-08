@@ -295,19 +295,20 @@ module.exports = async (req, res) => {
 
     const url = req.url || '';
 
+// GET /api/setup/purge-webhook -> clear webhook to allow local polling
+    if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
+      tgApi('setWebhook', { url: '' }, (r) => {
+        res.status(200).json({ ok: r && r.ok, description: r && r.description });
+      });
+      return;
+    }
+
+    // GET /api/setup-webhook -> set webhook for Vercel serverless
     if (req.method === 'GET' && url.includes('setup')) {
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const proto = req.headers['x-forwarded-proto'] || 'https';
       setWebhook(host, proto, (r) => {
         res.status(200).json({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` });
-      });
-      return;
-    }
-
-    // GET /api/setup/purge-webhook -> clear webhook to allow local polling
-    if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
-      tgApi('setWebhook', { url: '' }, (r) => {
-        res.status(200).json({ ok: r && r.ok, description: r && r.description });
       });
       return;
     }
