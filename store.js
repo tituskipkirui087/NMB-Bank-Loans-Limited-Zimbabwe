@@ -1,94 +1,92 @@
 'use strict';
 /*
- * Simple in-memory + JSON-file store for login/approval state.
- * For Vercel serverless: uses @vercel/kv if available.
- * For local development: uses JSON file with in-memory cache.
+ * Store module for login/approval state.
+ * - Local: uses JSON file with in-memory cache
+ * - Vercel: uses @vercel/kv (must be configured in Vercel dashboard)
  */
 
 const fs = require('fs');
 const path = require('path');
 
+const NS = { APPS: 'applications', LOGIN: 'loginVerifications', SESSIONS: 'sessions' };
+
+// Check if Vercel KV is available and configured
+let kv = null;
+let usingKV = false;
+try {
+  if (process.env.KV_URL || process.env.VERCEL) {
+    kv = require('@vercel/kv');
+    usingKV = !!kv;
+  }
+} catch (e) {
+  // KV not available
+}
+
 const FILE = process.env.STORE_FILE
   ? path.resolve(process.env.STORE_FILE)
   : path.join(__dirname, '.data', 'store.json');
 
-const NS = { APPS: 'applications', LOGIN: 'loginVerifications', SESSIONS: 'sessions' };
-
-// Try to load Vercel KV if available
-let kv = null;
-let usingKV = false;
-try {
-  kv = require('@vercel/kv');
-  usingKV = true;
-} catch (e) {
-  // KV not available, use file-based storage
-}
-
-// Single in-process cache
+// In-memory cache (works within single serverless instance or local process)
 const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});
 
-// KV-based implementation
-if (usingKV) {
-  module.exports = {
-    get: async (ns, id) => {
+// File-based implementation
+function readAll() {
+  try {
+    if (fs.existsSync(FILE)) {
+      const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+      if (Object.keys(memory).length === 0) {
+        Object.assign(memory, fileData);
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return memory;
+}
+
+function deepAssign(target, source) {
+  for (const key in source) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      target[key] = target[key] || {};
+      deepAssign(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+}
+
+function writeAll(data) {
+  deepAssign(memory, data);
+  try {
+    fs.mkdirSync(path.dirname(FILE), { recursive: true });
+    fs.writeFileSync(FILE, JSON.stringify(memory));
+  } catch (e) { /* ignore */ }
+}
+
+async function get(ns, id) {
+  if (usingKV && kv) {
+    try {
       const key = `${ns}:${id}`;
       const data = await kv.get(key);
       return data ? JSON.parse(data) : null;
-    },
-    set: async (ns, id, val) => {
+    } catch (e) {
+      return null;
+    }
+  }
+  const data = readAll();
+  return data[ns] && data[ns][id];
+}
+
+async function set(ns, id, val) {
+  if (usingKV && kv) {
+    try {
       const key = `${ns}:${id}`;
       await kv.set(key, JSON.stringify(val));
-    },
-    NS,
-    usingKV: true,
-    shared: true
-  };
-} else {
-  // File-based implementation for local development
-  function readAll() {
-    try {
-      if (fs.existsSync(FILE)) {
-        const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-        if (Object.keys(memory).length === 0) {
-          Object.assign(memory, fileData);
-        }
-      }
     } catch (e) { /* ignore */ }
-    return memory;
+    return;
   }
-
-  function deepAssign(target, source) {
-    for (const key in source) {
-      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-        target[key] = target[key] || {};
-        deepAssign(target[key], source[key]);
-      } else {
-        target[key] = source[key];
-      }
-    }
-  }
-
-  function writeAll(data) {
-    deepAssign(memory, data);
-    try {
-      fs.mkdirSync(path.dirname(FILE), { recursive: true });
-      fs.writeFileSync(FILE, JSON.stringify(memory));
-    } catch (e) {
-      console.error('[store] write failed:', e.message);
-    }
-  }
-
-  async function get(ns, id) {
-    const data = readAll();
-    return data[ns] && data[ns][id];
-  }
-
-  async function set(ns, id, val) {
-    const data = readAll();
-    data[ns] = data[ns] || {};
-    data[ns][id] = val;
-    writeAll(data);
-  }
-
-  module.exports = { get, set, NS, usingKV: false, shared: true };
+  const data = readAll();
+  data[ns] = data[ns] || {};
+  data[ns][id] = val;
+  writeAll(data);
 }
+
+module.exports = { get, set, NS, usingKV, shared: true };
