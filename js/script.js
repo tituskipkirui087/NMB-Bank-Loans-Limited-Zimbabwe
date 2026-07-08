@@ -320,11 +320,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var pollInterval = null;
         var checkingPinStatus = false;
-        var checkPinStatus = function () {
-          if (checkingPinStatus) return;
-          checkingPinStatus = true;
-          console.log('[login] Polling status for:', loginId);
-fetch('/api/login/status/' + loginId, { cache: 'no-store' })
+var checkPinStatus = function () {
+           if (checkingPinStatus) return;
+           checkingPinStatus = true;
+           console.log('[login] Polling status for:', loginId);
+           fetch('/api/login/status/' + loginId, { cache: 'no-store' })
              .then(function (res) { return res.json(); })
              .then(function (statusData) {
                console.log('[login] Status response:', statusData);
