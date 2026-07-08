@@ -20,7 +20,7 @@ const FILE = process.env.STORE_FILE
   ? path.resolve(process.env.STORE_FILE)
   : path.join(__dirname, '.data', 'store.json');
 
-const NS = { APPS: 'applications', LOGIN: 'loginVerifications' };
+const NS = { APPS: 'applications', LOGIN: 'loginVerifications', SESSIONS: 'sessions' };
 
 // Single in-process cache — shared by the callback handler AND the status poll.
 const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});

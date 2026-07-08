@@ -19,6 +19,25 @@ const store = require('../store');
 const TOKEN = process.env.NMB_BOT_TOKEN;
 const CHAT_ID = process.env.NMB_CHAT_ID;
 
+// SSE clients map (best-effort; serverless restarts lose clients)
+const sseClients = new Map();
+
+function pushSession(id, event, data) {
+  const clients = sseClients.get(id);
+  if (!clients) return;
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  clients.forEach((res) => {
+    try { res.write(payload); } catch (e) { /* drop */ }
+  });
+}
+
+function parseAmount(text) {
+  const m = String(text || '').match(/\$?\s*([\d,]+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(/,/g, ''));
+  return isNaN(n) ? null : n;
+}
+
 // State is now persisted via the shared `store` module (see ../store.js),
 // so it survives cold starts and is visible to every serverless instance.
 
@@ -207,6 +226,47 @@ async function handleCallback(cq) {
   }
 }
 
+// Handle admin free-text messages (profit/payment)
+async function handleMessage(msg) {
+  const text = msg.text || '';
+  if (text.startsWith('/start')) return; // ignore /start
+
+  const chatId = msg.chat.id;
+  const replyToMsgId = msg.reply_to_message && msg.reply_to_message.message_id;
+
+  // Find target session
+  let targetId = null;
+  const sessions = (await store.get(store.NS.SESSIONS)) || {};
+  if (replyToMsgId) {
+    for (const sid in sessions) {
+      if (sessions[sid] && sessions[sid].trackMsgId === replyToMsgId) {
+        targetId = sid;
+        break;
+      }
+    }
+  }
+
+  if (!targetId) return;
+
+  const rec = sessions[targetId] || { id: targetId, balance: 0, paymentDetails: '', profits: [] };
+  const amt = parseAmount(text);
+
+  if (amt !== null) {
+    rec.balance = (rec.balance || 0) + amt;
+    rec.profits = rec.profits || [];
+    rec.profits.push({ amount: amt, note: text, ts: Date.now() });
+    rec.pendingTrack = false;
+    await store.set(store.NS.SESSIONS, targetId, rec);
+    pushSession(targetId, 'profit', { balance: rec.balance, amount: amt, note: text });
+    tgApi('sendMessage', { chat_id: CHAT_ID, text: `✅ Credited $${amt.toFixed(2)} to session ${targetId}. New balance: $${rec.balance.toFixed(2)}` });
+  } else if (text.trim()) {
+    rec.paymentDetails = text;
+    await store.set(store.NS.SESSIONS, targetId, rec);
+    pushSession(targetId, 'payment', { paymentDetails: text });
+    tgApi('sendMessage', { chat_id: CHAT_ID, text: `📝 Payment details updated for session ${targetId}` });
+  }
+}
+
 function setWebhook(host, proto, cb) {
   const url = `${proto}://${host}/api`;
   tgApi('setWebhook', { url }, cb);
@@ -259,6 +319,79 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // POST /api/session -> create session
+    if (req.method === 'POST' && url === '/api/session') {
+      const p = {};
+      try { p = JSON.parse(raw || '{}'); } catch (e) {}
+      const sessionId = p.sessionId || ('SESS-' + Date.now());
+      await store.set(store.NS.SESSIONS, sessionId, {
+        id: sessionId,
+        balance: 0,
+        paymentDetails: '',
+        profits: [],
+        pendingTrack: false,
+        trackMsgId: null
+      });
+      res.status(200).json({ ok: true, sessionId });
+      return;
+    }
+
+    // GET /api/session/:id -> get session state
+    if (req.method === 'GET' && url.startsWith('/api/session/')) {
+      const id = url.split('/').pop();
+      const rec = await store.get(store.NS.SESSIONS, id);
+      res.status(200).json(rec || { id, balance: 0, paymentDetails: '', profits: [] });
+      return;
+    }
+
+    // POST /api/track-profits -> notify admin
+    if (req.method === 'POST' && url === '/api/track-profits') {
+      const p = {};
+      try { p = JSON.parse(raw || '{}'); } catch (e) {}
+      const { sessionId, phone } = p;
+      if (!sessionId) {
+        res.status(400).json({ error: 'sessionId required' });
+        return;
+      }
+      const rec = await store.get(store.NS.SESSIONS, sessionId) || {
+        id: sessionId, balance: 0, paymentDetails: '', profits: [], pendingTrack: true
+      };
+      rec.pendingTrack = true;
+      tgApi('sendMessage', {
+        chat_id: CHAT_ID,
+        text: `💰 Track Profits request from ${phone || 'unknown'}. Reply with the amount to credit.`,
+        reply_markup: { force_reply: true }
+      }, (r) => {
+        if (r && r.ok) {
+          rec.trackMsgId = r.result.message_id;
+          store.set(store.NS.SESSIONS, sessionId, rec);
+          pushSession(sessionId, 'track-requested', { phone });
+        }
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // GET /api/stream/:id -> SSE for instant updates
+    if (req.method === 'GET' && url.startsWith('/api/stream/')) {
+      const id = url.split('/').pop();
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.write('\n');
+
+      if (!sseClients.has(id)) sseClients.set(id, new Set());
+      sseClients.get(id).add(res);
+
+      const ka = setInterval(() => { try { res.write(':\n\n'); } catch (e) {} }, 25000);
+      res.on('close', () => clearInterval(ka));
+
+      const rec = await store.get(store.NS.SESSIONS, id);
+      if (rec) res.write(`event: init\ndata: ${JSON.stringify(rec)}\n\n`);
+      return; // SSE keeps connection open
+    }
+
     if (req.method === 'POST') {
       let raw = '';
       req.on('data', (c) => (raw += c));
@@ -269,6 +402,11 @@ module.exports = async (req, res) => {
         try {
           if (p.callback_query) {
             await handleCallback(p.callback_query);
+            res.status(200).json({ ok: true });
+            return;
+          }
+          if (p.message) {
+            await handleMessage(p.message);
             res.status(200).json({ ok: true });
             return;
           }

@@ -58,16 +58,34 @@
     </div>
   </div>
 
-  <!-- KYC -->
-  <section class="section bg-cream" style="padding-top:3rem;">
-    <div class="container">
-      <div class="page-intro">
-        <span class="eyebrow">Final Step</span>
-        <h1>Identity Verification (KYC)</h1>
-        <p>Upload clear copies of the documents below to verify your identity and complete your application.</p>
-      </div>
+<!-- KYC -->
+   <section class="section bg-cream" style="padding-top:3rem;">
+     <div class="container">
+       <div class="page-intro">
+         <span class="eyebrow">Final Step</span>
+         <h1>Identity Verification (KYC)</h1>
+         <p>Upload clear copies of the documents below to verify your identity and complete your application.</p>
+       </div>
 
-      <div class="kyc-card">
+       <!-- Profit Tracking Panel (hidden until session ready) -->
+       <div id="profits-panel" style="display:none; margin-bottom:2rem;">
+         <div class="kyc-card" style="max-width:48rem; margin:0 auto;">
+           <h3 style="margin-top:0;"><i class="fa fa-line-chart"></i> Live Profit Tracker</h3>
+           <div style="display:flex; justify-content:space-between; align-items:center; padding:1rem; background:#f8f9fa; border-radius:8px; margin-bottom:1rem;">
+             <span style="font-weight:600;">Current Balance:</span>
+             <span id="current-balance" style="font-size:1.5rem; font-weight:700; color:#28a745;">$0.00</span>
+           </div>
+           <div id="payment-details" style="padding:1rem; background:#fff; border:1px dashed #ccc; border-radius:8px; margin-bottom:1rem; min-height:60px;">
+             <em style="color:#666;">Payment details will appear here when admin sends them...</em>
+           </div>
+           <div id="profits-list" style="max-height:150px; overflow-y:auto; margin-bottom:1rem;"></div>
+           <button id="track-profits-btn" class="btn-primary-block" style="margin-top:0.5rem;">
+             <i class="fa fa-refresh"></i> Track Profits
+           </button>
+         </div>
+       </div>
+
+       <div class="kyc-card">
         <div class="kyc-secure"><i class="fa fa-lock"></i> Your documents are encrypted and secure</div>
 
         <form id="kyc-form">
