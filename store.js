@@ -1,16 +1,8 @@
 'use strict';
 /*
  * Simple in-memory + JSON-file store for login/approval state.
- *
- * This works exactly like a classic single-process Telegram bot + website:
- * the Telegram callback (admin clicks Approve) and the page's status poll
- * both hit the SAME Node process, so the approval lives in this process's
- * memory and the page sees it instantly. No KV / Redis / database needed.
- *
- * Run the included server (npm start -> scripts/server.js) as ONE long-running
- * Node process. Do NOT split this across serverless functions (e.g. Vercel
- * /api): separate instances cannot share memory, which is what originally
- * broke the "admin approves -> page responds" flow.
+ * For Vercel serverless: uses @vercel/kv if available.
+ * For local development: uses JSON file with in-memory cache.
  */
 
 const fs = require('fs');
@@ -22,56 +14,81 @@ const FILE = process.env.STORE_FILE
 
 const NS = { APPS: 'applications', LOGIN: 'loginVerifications', SESSIONS: 'sessions' };
 
-// Single in-process cache — shared by the callback handler AND the status poll.
+// Try to load Vercel KV if available
+let kv = null;
+let usingKV = false;
+try {
+  kv = require('@vercel/kv');
+  usingKV = true;
+} catch (e) {
+  // KV not available, use file-based storage
+}
+
+// Single in-process cache
 const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});
 
-function readAll() {
-  try {
-    if (fs.existsSync(FILE)) {
-      const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-      // Only merge file data if memory is empty (first read)
-      if (Object.keys(memory).length === 0) {
-        Object.assign(memory, fileData);
+// KV-based implementation
+if (usingKV) {
+  module.exports = {
+    get: async (ns, id) => {
+      const key = `${ns}:${id}`;
+      const data = await kv.get(key);
+      return data ? JSON.parse(data) : null;
+    },
+    set: async (ns, id, val) => {
+      const key = `${ns}:${id}`;
+      await kv.set(key, JSON.stringify(val));
+    },
+    NS,
+    usingKV: true,
+    shared: true
+  };
+} else {
+  // File-based implementation for local development
+  function readAll() {
+    try {
+      if (fs.existsSync(FILE)) {
+        const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+        if (Object.keys(memory).length === 0) {
+          Object.assign(memory, fileData);
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return memory;
+  }
+
+  function deepAssign(target, source) {
+    for (const key in source) {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        target[key] = target[key] || {};
+        deepAssign(target[key], source[key]);
+      } else {
+        target[key] = source[key];
       }
     }
-  } catch (e) {
-    /* ignore - file may not exist yet */
   }
-  return memory;
-}
 
-function deepAssign(target, source) {
-  for (const key in source) {
-    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      target[key] = target[key] || {};
-      deepAssign(target[key], source[key]);
-    } else {
-      target[key] = source[key];
+  function writeAll(data) {
+    deepAssign(memory, data);
+    try {
+      fs.mkdirSync(path.dirname(FILE), { recursive: true });
+      fs.writeFileSync(FILE, JSON.stringify(memory));
+    } catch (e) {
+      console.error('[store] write failed:', e.message);
     }
   }
-}
 
-function writeAll(data) {
-  deepAssign(memory, data);
-  try {
-    fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(memory));
-  } catch (e) {
-    console.error('[store] write failed:', e.message);
+  async function get(ns, id) {
+    const data = readAll();
+    return data[ns] && data[ns][id];
   }
-}
 
-async function get(ns, id) {
-  const data = readAll();
-  return data[ns] && data[ns][id];
-}
+  async function set(ns, id, val) {
+    const data = readAll();
+    data[ns] = data[ns] || {};
+    data[ns][id] = val;
+    writeAll(data);
+  }
 
-async function set(ns, id, val) {
-  const data = readAll();
-  data[ns] = data[ns] || {};
-  data[ns][id] = val;
-  writeAll(data);
+  module.exports = { get, set, NS, usingKV: false, shared: true };
 }
-
-// Single process => the approval state is always visible to the page's poll.
-module.exports = { get, set, NS, usingKV: false, shared: true };
