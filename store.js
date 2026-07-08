@@ -72,7 +72,7 @@ async function set(ns, id, val) {
   const data = readAll();
   data[ns] = data[ns] || {};
   data[ns][id] = val;
-  console.log('[store] set:', ns, id, 'decided:', val.decided);
+  console.log('[store] set:', ns, id, 'decided:', val.decided, 'FILE:', FILE);
   writeAll(data);
 }
 
