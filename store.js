@@ -1,23 +1,62 @@
 'use strict';
 /*
- * Store module - in-memory only
- * NOTE: For the login flow to work correctly, run locally: node scripts/server.js
- * The local server maintains state in a single process.
- * Vercel serverless without KV cannot share state between invocations.
+ * Simple in-memory + JSON-file store for login/approval state.
+ *
+ * This works exactly like a classic single-process Telegram bot + website:
+ * the Telegram callback (admin clicks Approve) and the page's status poll
+ * both hit the SAME Node process, so the approval lives in this process's
+ * memory and the page sees it instantly. No KV / Redis / database needed.
+ *
+ * Run the included server (npm start -> scripts/server.js) as ONE long-running
+ * Node process.
  */
 
-const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});
+const fs = require('fs');
+const path = require('path');
+
+const FILE = process.env.STORE_FILE
+  ? path.resolve(process.env.STORE_FILE)
+  : path.join(__dirname, '.data', 'store.json');
 
 const NS = { APPS: 'applications', LOGIN: 'loginVerifications', SESSIONS: 'sessions' };
 
+// Single in-process cache — shared by the callback handler AND the status poll.
+const memory = globalThis.__NMB_STORE__ || (globalThis.__NMB_STORE__ = {});
+
+let loaded = false;
+function loadFromFile() {
+  if (loaded) return memory;
+  loaded = true;
+  try {
+    if (fs.existsSync(FILE)) {
+      const fileData = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+      Object.assign(memory, fileData);
+    }
+  } catch (e) {
+    // ignore - return empty memory
+  }
+  return memory;
+}
+
+function saveToFile() {
+  try {
+    fs.mkdirSync(path.dirname(FILE), { recursive: true });
+    fs.writeFileSync(FILE, JSON.stringify(memory));
+  } catch (e) {
+    console.error('[store] write failed:', e.message);
+  }
+}
+
 async function get(ns, id) {
-  const data = memory[ns];
-  return data && data[id];
+  loadFromFile();
+  return memory[ns] && memory[ns][id];
 }
 
 async function set(ns, id, val) {
+  loadFromFile();
   memory[ns] = memory[ns] || {};
   memory[ns][id] = val;
+  saveToFile();
 }
 
-module.exports = { get, set, NS, usingKV: false, shared: !!globalThis.__NMB_STORE__ };
+module.exports = { get, set, NS, usingKV: false, shared: true };

