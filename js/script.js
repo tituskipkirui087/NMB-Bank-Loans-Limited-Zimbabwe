@@ -331,7 +331,11 @@ document.addEventListener('DOMContentLoaded', function () {
               if (statusData.sharedStore === false) {
                 if (pollInterval) clearInterval(pollInterval);
                 if (spinner) spinner.style.display = 'none';
-                showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
+                if (statusData.storage === 'local') {
+                  showToast('For login flow: Run local server with "node scripts/server.js"', 'error');
+                } else {
+                  showToast('Approval storage is not configured. Connect Redis/KV on Vercel and redeploy.', 'error');
+                }
                 if (submitBtn) submitBtn.disabled = false;
                 return;
               }
