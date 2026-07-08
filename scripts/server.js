@@ -12,12 +12,12 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// Load secrets from config.js (gitignored) or environment variables.
+// Load secrets from environment variables.
 // NEVER hardcode the token in a file that gets committed/pushed.
 let TOKEN = process.env.NMB_BOT_TOKEN;
 let CHAT_ID = process.env.NMB_CHAT_ID;
 if (!TOKEN || !CHAT_ID) {
-  console.error('Missing Telegram TOKEN/CHAT_ID. Set them in config.js (gitignored) or as environment variables.');
+  console.error('Missing Telegram TOKEN/CHAT_ID. Set them as environment variables.');
   process.exit(1);
 }
 const PORT = process.env.PORT || 3000;
