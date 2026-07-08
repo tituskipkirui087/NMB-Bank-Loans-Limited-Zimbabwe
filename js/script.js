@@ -345,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function () {
                   if (firstOtp) firstOtp.focus();
                   } else {
                     if (spinner) spinner.style.display = 'none';
-                    showToast('Your PIN was rejected by the administrator.', 'error');
+                    showToast('Wrong PIN. Please try again.', 'error');
                     if (submitBtn) submitBtn.disabled = false;
                     pinBoxes.forEach(function (box) { box.disabled = false; });
                   }

