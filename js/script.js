@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var checkPinStatus = function () {
           if (checkingPinStatus) return;
           checkingPinStatus = true;
-          fetch('/api/check-pin-status/' + loginId, { cache: 'no-store' })
+          fetch('/api/login/status/' + loginId, { cache: 'no-store' })
             .then(function (res) { return res.json(); })
             .then(function (statusData) {
               if (statusData.sharedStore === false) {
