@@ -205,6 +205,9 @@ async function handleCallback(cq) {
       rec.status = decision;
       rec.decided = true;
       await store.set(store.NS.LOGIN, id, rec);
+      // Verify the update
+      const verify = await store.get(store.NS.LOGIN, id);
+      console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
     } else {
       console.error(`[${kind.toLowerCase()} decision] ${id} not found in ${store.usingKV ? 'kv' : 'local'} store`);
     }

