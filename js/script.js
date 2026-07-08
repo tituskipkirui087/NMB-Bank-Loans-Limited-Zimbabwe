@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
       fetch('/api/notify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: num, pinSubmitted: true })
+        body: JSON.stringify({ username: num, pin: pinHidden.value })
       })
       .then(function (res) { return res.json(); })
       .then(function (data) {
