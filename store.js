@@ -63,16 +63,13 @@ function writeAll(data) {
 
 async function get(ns, id) {
   const data = readAll();
-  const result = data[ns] && data[ns][id];
-  console.log('[store] get:', ns, id, 'result:', !!result);
-  return result;
+  return data[ns] && data[ns][id];
 }
 
 async function set(ns, id, val) {
   const data = readAll();
   data[ns] = data[ns] || {};
   data[ns][id] = val;
-  console.log('[store] set:', ns, id, 'decided:', val.decided, 'FILE:', FILE);
   writeAll(data);
 }
 
