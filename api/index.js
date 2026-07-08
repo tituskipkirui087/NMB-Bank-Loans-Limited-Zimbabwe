@@ -295,7 +295,7 @@ module.exports = async (req, res) => {
 
     const url = req.url || '';
 
-// GET /api/setup/purge-webhook -> clear webhook to allow local polling
+    // GET /api/setup/purge-webhook -> clear webhook to allow local polling
     if (req.method === 'GET' && url.startsWith('/api/setup/purge-webhook')) {
       tgApi('setWebhook', { url: '' }, (r) => {
         res.status(200).json({ ok: r && r.ok, description: r && r.description });
