@@ -187,6 +187,7 @@ async function notifyLoginVerification(login) {
 /* ---------- Handle admin Approve / Reject clicks ---------- */
 let updateOffset = 0;
 async function pollUpdates() {
+  console.log('[poll] Checking for updates, offset:', updateOffset);
   try {
     const body = await new Promise((resolve, reject) => {
       https.get(
@@ -199,8 +200,11 @@ async function pollUpdates() {
       ).on('error', reject);
     });
     let json = null;
-    try { json = JSON.parse(body); } catch (e) { /* ignore */ }
+    try { json = JSON.parse(body); } catch (e) { 
+      console.error('[poll] JSON parse failed:', e.message, 'body:', body.substring(0, 200));
+    }
     if (json && json.ok) {
+      console.log('[poll] Got', json.result.length, 'updates');
       for (const upd of json.result) {
         updateOffset = upd.update_id + 1;
         if (upd.callback_query) {
