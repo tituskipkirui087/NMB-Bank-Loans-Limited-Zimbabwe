@@ -452,9 +452,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   // GET /api/health -> check server status
-  if (req.method === 'GET' && req.url.startsWith('/api/health')) {
+  if (req.method === 'GET' && req.url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, server: 'running', env: { TOKEN: !!TOKEN, CHAT_ID: !!CHAT_ID } }));
+    res.end(JSON.stringify({ ok: true, server: 'running', updateOffset, env: { TOKEN: !!TOKEN, CHAT_ID: !!CHAT_ID } }));
     return;
   }
 
