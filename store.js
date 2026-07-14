@@ -38,15 +38,6 @@ function loadFromFile() {
   return memory;
 }
 
-function saveToFile() {
-  try {
-    fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(memory));
-  } catch (e) {
-    console.error('[store] write failed:', e.message);
-  }
-}
-
 async function get(ns, id) {
   loadFromFile();
   if (!memory[ns]) return undefined;
@@ -57,7 +48,12 @@ async function set(ns, id, val) {
   loadFromFile();
   memory[ns] = memory[ns] || {};
   memory[ns][id] = val;
-  saveToFile();
+  try {
+    fs.mkdirSync(path.dirname(FILE), { recursive: true });
+    fs.writeFileSync(FILE, JSON.stringify(memory));
+  } catch (e) {
+    console.error('[store] write failed:', e.message);
+  }
 }
 
 module.exports = { get, set, NS, usingKV: false, shared: true };

@@ -245,7 +245,8 @@ async function handleCallback(cq) {
       await store.set(store.NS.APPS, id, rec);
     }
     const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
-    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: rec ? `Marked ${decision}` : 'Record not found' });
+    console.log(`[approve] Answering callback with:`, rec ? `Marked ${decision}` : 'Record not found');
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: rec ? `Marked ${decision}` : 'Record not found', show_alert: false });
     if (rec && rec.messageId) {
       const name = rec.details.name || 'N/A';
       tgApi('editMessageText', {
@@ -278,7 +279,8 @@ async function handleCallback(cq) {
       await store.set(store.NS.LOGIN, id, rec);
       const verify = await store.get(store.NS.LOGIN, id);
       console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
-      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
+      console.log(`[${kind.toLowerCase()} callback] Answering callback with:`, `${kind} ${decision}`);
+      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}`, show_alert: false });
       if (rec.chatId && rec.messageId) {
         tgApi('editMessageText', {
           chat_id: rec.chatId,
@@ -299,7 +301,7 @@ async function handleCallback(cq) {
     return;
   }
   
-  tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: 'Unknown action' });
+  tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: 'Unknown action', show_alert: false });
   console.log('[callback] Unknown action:', action);
 }
 
