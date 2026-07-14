@@ -444,10 +444,25 @@ const server = http.createServer(async (req, res) => {
 
   // GET /api/setup/purge-webhook -> clear any existing webhook to allow polling
   if (req.method === 'GET' && req.url.startsWith('/api/setup/purge-webhook')) {
-    tgApi('setWebhook', { url: '' }, (r) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: r && r.ok, description: r && r.description }));
+    const result = await new Promise((resolve) => {
+      tgApi('setWebhook', { url: '' }, (r) => resolve(r));
     });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: result && result.ok, description: result && result.description }));
+    return;
+  }
+
+  // GET /api/setup/webhook-info -> check current webhook status
+  if (req.method === 'GET' && req.url.startsWith('/api/setup/webhook-info')) {
+    const result = await new Promise((resolve) => {
+      https.get({ hostname: 'api.telegram.org', path: `/bot${TOKEN}/getWebhookInfo` }, (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => resolve(JSON.parse(data)));
+      }).on('error', (e) => resolve({ error: e.message }));
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(result));
     return;
   }
 
