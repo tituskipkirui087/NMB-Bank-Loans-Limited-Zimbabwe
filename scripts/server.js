@@ -229,6 +229,7 @@ async function pollUpdates() {
   } catch (e) {
     console.error('[poll]', e.message);
   }
+  // Only schedule next poll after current one completes
   setTimeout(pollUpdates, 1000);
 }
 
