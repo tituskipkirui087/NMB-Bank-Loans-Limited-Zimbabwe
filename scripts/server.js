@@ -219,6 +219,8 @@ async function pollUpdates() {
             resolve();
           });
         });
+        // Retry immediately after clearing webhook
+        return pollUpdates();
       }
     }
   } catch (e) {
@@ -240,7 +242,7 @@ async function handleCallback(cq) {
       await store.set(store.NS.APPS, id, rec);
     }
     const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
-    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Marked ${decision}` });
+    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: rec ? `Marked ${decision}` : 'Record not found' });
     if (rec && rec.messageId) {
       const name = rec.details.name || 'N/A';
       tgApi('editMessageText', {
@@ -560,17 +562,18 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, async () => {
   console.log(`Notification server listening on http://localhost:${PORT}`);
-  // Clear any existing webhook to allow polling to work BEFORE we start polling
-  await new Promise((resolve) => {
-    tgApi('setWebhook', { url: '' }, (r) => {
-      if (r && r.ok) {
-        console.log('[setup] Cleared existing webhook:', r.description);
-      } else if (r && r.description) {
-        console.log('[setup] Webhook clear response:', r.description);
-      }
-      resolve();
+  try {
+    const webhookResult = await new Promise((resolve) => {
+      tgApi('setWebhook', { url: '' }, (r) => resolve(r));
     });
-  });
+    if (webhookResult && webhookResult.ok) {
+      console.log('[setup] Cleared existing webhook:', webhookResult.description);
+    } else if (webhookResult && webhookResult.description) {
+      console.log('[setup] Webhook clear response:', webhookResult.description);
+    }
+  } catch (e) {
+    console.log('[setup] Webhook clear failed (continuing anyway)', e.message);
+  }
   console.log('Polling Telegram for admin decisions...');
   pollUpdates();
 });
