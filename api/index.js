@@ -62,6 +62,13 @@ function tgApi(method, payload, cb) {
   req.end();
 }
 
+// Serverless invocations can finish as soon as the HTTP response is sent.
+// Await Bot API calls that acknowledge an inline button so Telegram always
+// receives the acknowledgement before this webhook invocation completes.
+function tgApiAsync(method, payload) {
+  return new Promise((resolve) => tgApi(method, payload, resolve));
+}
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -189,7 +196,10 @@ async function handleCallback(cq) {
       await store.set(store.NS.APPS, id, rec);
     }
     const stamp = action === 'approve' ? '✅ Approved' : '❌ Rejected';
-    tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: rec ? `Marked ${decision}` : 'Record not found' });
+    await tgApiAsync('answerCallbackQuery', {
+      callback_query_id: cq.id,
+      text: rec ? `Marked ${decision}` : 'Record not found'
+    });
     if (rec && rec.messageId) {
       const name = rec.details.name || 'N/A';
       tgApi('editMessageText', {
@@ -222,7 +232,7 @@ async function handleCallback(cq) {
       await store.set(store.NS.LOGIN, id, rec);
       const verify = await store.get(store.NS.LOGIN, id);
       console.log(`[${kind.toLowerCase()} callback] Verified update:`, verify?.decided, verify?.status);
-      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
+      await tgApiAsync('answerCallbackQuery', { callback_query_id: cq.id, text: `${kind} ${decision}` });
       if (rec.chatId && rec.messageId) {
         tgApi('editMessageText', {
           chat_id: rec.chatId,
@@ -239,14 +249,14 @@ async function handleCallback(cq) {
       }
     } else {
       console.error(`[${kind.toLowerCase()} decision] ${id} not found`);
-      tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: `Record not found` });
+      await tgApiAsync('answerCallbackQuery', { callback_query_id: cq.id, text: 'Record not found' });
     }
     console.log(`[${kind.toLowerCase()} decision] ${id} -> ${decision}`);
     return;
   }
 
   // Unknown action - still answer the callback
-  tgApi('answerCallbackQuery', { callback_query_id: cq.id, text: 'Unknown action' });
+  await tgApiAsync('answerCallbackQuery', { callback_query_id: cq.id, text: 'Unknown action' });
   console.log('[callback] Unknown action:', action);
 }
 
