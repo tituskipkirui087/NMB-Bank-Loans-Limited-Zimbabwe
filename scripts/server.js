@@ -61,7 +61,9 @@ function tgApi(method, payload, cb) {
       res.on('data', (c) => (body += c));
       res.on('end', () => {
         let json = null;
-        try { json = JSON.parse(body); } catch (e) { /* ignore */ }
+        try { json = JSON.parse(body); } catch (e) { 
+          console.error('[tgApi] JSON parse failed for', method, body);
+        }
         if (cb) cb(json);
       });
     }
@@ -202,6 +204,7 @@ async function pollUpdates() {
       for (const upd of json.result) {
         updateOffset = upd.update_id + 1;
         if (upd.callback_query) {
+          console.log('[poll] Processing callback_query:', upd.callback_query.data);
           try { await handleCallback(upd.callback_query); } catch (e) { console.error('[callback]', e.message); }
         }
         if (upd.message) {
@@ -219,8 +222,8 @@ async function pollUpdates() {
             resolve();
           });
         });
-        // Retry immediately after clearing webhook
-        return pollUpdates();
+        // Continue to setTimeout for next poll (don't double-poll)
+        console.log('[poll] Retrying on next cycle...');
       }
     }
   } catch (e) {

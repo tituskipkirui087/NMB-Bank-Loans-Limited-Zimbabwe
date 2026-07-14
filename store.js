@@ -49,7 +49,8 @@ function saveToFile() {
 
 async function get(ns, id) {
   loadFromFile();
-  return memory[ns] && memory[ns][id];
+  if (!memory[ns]) return undefined;
+  return memory[ns][id];
 }
 
 async function set(ns, id, val) {
